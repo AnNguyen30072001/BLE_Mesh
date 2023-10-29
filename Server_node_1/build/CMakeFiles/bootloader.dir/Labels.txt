@@ -1,0 +1,13 @@
+# Target labels
+ bootloader
+# Source files and their labels
+C:/BLE_Mesh/Server_node_1/build/CMakeFiles/bootloader
+C:/BLE_Mesh/Server_node_1/build/CMakeFiles/bootloader.rule
+C:/BLE_Mesh/Server_node_1/build/CMakeFiles/bootloader-complete.rule
+C:/BLE_Mesh/Server_node_1/build/bootloader-prefix/src/bootloader-stamp/bootloader-install.rule
+C:/BLE_Mesh/Server_node_1/build/bootloader-prefix/src/bootloader-stamp/bootloader-mkdir.rule
+C:/BLE_Mesh/Server_node_1/build/bootloader-prefix/src/bootloader-stamp/bootloader-download.rule
+C:/BLE_Mesh/Server_node_1/build/bootloader-prefix/src/bootloader-stamp/bootloader-update.rule
+C:/BLE_Mesh/Server_node_1/build/bootloader-prefix/src/bootloader-stamp/bootloader-patch.rule
+C:/BLE_Mesh/Server_node_1/build/bootloader-prefix/src/bootloader-stamp/bootloader-configure.rule
+C:/BLE_Mesh/Server_node_1/build/bootloader-prefix/src/bootloader-stamp/bootloader-build.rule
