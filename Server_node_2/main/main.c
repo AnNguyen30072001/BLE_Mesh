@@ -40,13 +40,16 @@
 
 
 // Dummy sensor data
-uint16_t test_data = 33;
+uint8_t test_data = 32;
+uint8_t test_data_arr[2] = {32,102};
+
+// esp_ble_mesh_msg_ctx_t *ctx_user;
 
 
 static uint8_t dev_uuid[ESP_BLE_MESH_OCTET16_LEN] = { 0x32, 0x10 };
 
 static esp_ble_mesh_cfg_srv_t config_server = {
-    .relay = ESP_BLE_MESH_RELAY_DISABLED,
+    .relay = ESP_BLE_MESH_RELAY_ENABLED,
     .beacon = ESP_BLE_MESH_BEACON_ENABLED,
 #if defined(CONFIG_BLE_MESH_FRIEND)
     .friend_state = ESP_BLE_MESH_FRIEND_ENABLED,
@@ -165,19 +168,25 @@ static void example_ble_mesh_custom_model_cb(esp_ble_mesh_model_cb_event_t event
     switch (event) {
     case ESP_BLE_MESH_MODEL_OPERATION_EVT:
         if (param->model_operation.opcode == ESP_BLE_MESH_VND_MODEL_OP_SEND) {
-            vTaskDelay(1 * portTICK_PERIOD_MS * 10);
             uint16_t tid = *(uint16_t *)param->model_operation.msg;
             
             ESP_LOGI(TAG, "Recv 0x%06x, tid 0x%04x", param->model_operation.opcode, tid);
+
             // esp_err_t err = esp_ble_mesh_server_model_send_msg(&vnd_models[0],
             //         param->model_operation.ctx, ESP_BLE_MESH_VND_MODEL_OP_STATUS,
             //         sizeof(tid), (uint8_t *)&tid);
+
+            // esp_err_t err = esp_ble_mesh_server_model_send_msg(&vnd_models[0],
+            //         param->model_operation.ctx, ESP_BLE_MESH_VND_MODEL_OP_STATUS,
+            //         sizeof(test_data), (uint8_t *)&test_data);
             esp_err_t err = esp_ble_mesh_server_model_send_msg(&vnd_models[0],
                     param->model_operation.ctx, ESP_BLE_MESH_VND_MODEL_OP_STATUS,
-                    sizeof(test_data), (uint8_t *)&test_data);
+                    sizeof(test_data_arr), (uint8_t *)test_data_arr);
             if (err) {
                 ESP_LOGE(TAG, "Failed to send message 0x%06x", ESP_BLE_MESH_VND_MODEL_OP_STATUS);
             }
+
+            // ctx_user = param->model_operation.ctx;
         }
         break;
     case ESP_BLE_MESH_MODEL_SEND_COMP_EVT:
@@ -227,17 +236,16 @@ void delay_seconds(uint32_t seconds) {
 
 // void send_to_master(uint8_t payload)
 // {
-//     // printf("payload received by send_to_dimmer() 0x%02x", payload);
+//     printf("payload received by send_to_dimmer() 0x%02x", payload);
 //     esp_ble_mesh_msg_ctx_t ctx = {0};
-//     esp_err_t err = ESP_OK;
 
 //     ctx.net_idx = 0x0000;
 //     ctx.app_idx = 0x0000;
-//     ctx.addr = 0x0003;   /* dimmer */
+//     ctx.addr = 0x0005;   /* dimmer */
 //     ctx.send_ttl = ESP_BLE_MESH_TTL_DEFAULT;
 //     ctx.send_rel = true;
 
-//     err = esp_ble_mesh_server_model_send_msg(&vnd_models[0], &ctx,
+//     esp_err_t err = esp_ble_mesh_server_model_send_msg(&vnd_models[0], ctx_user,
 //     ESP_BLE_MESH_VND_MODEL_OP_STATUS, sizeof(payload), (uint8_t *)&payload);
 //     if (err) {
 //         ESP_LOGW(NODE_TAG, "Send message to master failed");
@@ -278,7 +286,8 @@ void app_main(void)
     }
 
     // while(1) {
-    //     send_to_master(dummy_sensor_data);
+    //     send_to_master(test_data);
     //     delay_seconds(3);
     // }
 }
+

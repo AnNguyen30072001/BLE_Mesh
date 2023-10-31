@@ -40,8 +40,8 @@
 
 
 // Dummy sensor data
-uint16_t test_data = 29;
-uint16_t test_node_num = 1;
+uint8_t test_data = 29;
+uint8_t test_data_arr[2] = {29,101};
 
 // esp_ble_mesh_msg_ctx_t *ctx_user;
 
@@ -49,7 +49,7 @@ uint16_t test_node_num = 1;
 static uint8_t dev_uuid[ESP_BLE_MESH_OCTET16_LEN] = { 0x32, 0x10 };
 
 static esp_ble_mesh_cfg_srv_t config_server = {
-    .relay = ESP_BLE_MESH_RELAY_DISABLED,
+    .relay = ESP_BLE_MESH_RELAY_ENABLED,
     .beacon = ESP_BLE_MESH_BEACON_ENABLED,
 #if defined(CONFIG_BLE_MESH_FRIEND)
     .friend_state = ESP_BLE_MESH_FRIEND_ENABLED,
@@ -176,9 +176,12 @@ static void example_ble_mesh_custom_model_cb(esp_ble_mesh_model_cb_event_t event
             //         param->model_operation.ctx, ESP_BLE_MESH_VND_MODEL_OP_STATUS,
             //         sizeof(tid), (uint8_t *)&tid);
 
+            // esp_err_t err = esp_ble_mesh_server_model_send_msg(&vnd_models[0],
+            //         param->model_operation.ctx, ESP_BLE_MESH_VND_MODEL_OP_STATUS,
+            //         sizeof(test_data), (uint8_t *)&test_data);
             esp_err_t err = esp_ble_mesh_server_model_send_msg(&vnd_models[0],
                     param->model_operation.ctx, ESP_BLE_MESH_VND_MODEL_OP_STATUS,
-                    sizeof(test_data), (uint8_t *)&test_data);
+                    sizeof(test_data_arr), (uint8_t *)test_data_arr);
             if (err) {
                 ESP_LOGE(TAG, "Failed to send message 0x%06x", ESP_BLE_MESH_VND_MODEL_OP_STATUS);
             }

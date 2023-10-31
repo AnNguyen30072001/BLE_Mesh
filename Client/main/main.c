@@ -59,6 +59,7 @@ static struct example_info_store {
     uint16_t server_addr;   /* Vendor server unicast address */
     uint16_t vnd_tid;       /* TID contained in the vendor message */
     uint16_t data;          /* Data received */
+    uint8_t *dataArr;
     uint8_t node_num; 
     uint16_t first_addr;
 } store = {
@@ -66,6 +67,7 @@ static struct example_info_store {
     .vnd_tid = 0,
     .data = 0,
     .node_num = 0,
+    .dataArr = NULL,
 };
 
 static nvs_handle_t NVS_HANDLE;
@@ -473,7 +475,7 @@ void example_ble_mesh_send_vendor_message(bool resend)
     ctx.net_idx = prov_key.net_idx;
     ctx.app_idx = prov_key.app_idx;
     // ctx.addr = store.server_addr;
-    ctx.addr = 5;
+    ctx.addr = 0xFFFF;
     // ctx.addr = store.first_addr;
     ctx.send_ttl = MSG_SEND_TTL;
     ctx.send_rel = MSG_SEND_REL;
@@ -483,15 +485,15 @@ void example_ble_mesh_send_vendor_message(bool resend)
         store.vnd_tid++;
     }
 
-    for(int i=0; i<store.node_num; i++) {
+    // for(int i=0; i<store.node_num; i++) {
         err = esp_ble_mesh_client_model_send_msg(vendor_client.model, &ctx, opcode,
             sizeof(store.vnd_tid), (uint8_t *)&store.vnd_tid, MSG_TIMEOUT, true, MSG_ROLE);
         if (err != ESP_OK) {
             ESP_LOGE(TAG, "Failed to send vendor message 0x%06x", opcode);
             return;
         }
-        ctx.addr++;
-    }
+    //     ctx.addr++;
+    // }
     
     mesh_example_info_store(); /* Store proper mesh example info */
 }
@@ -505,23 +507,27 @@ static void example_ble_mesh_custom_model_cb(esp_ble_mesh_model_cb_event_t event
     case ESP_BLE_MESH_MODEL_OPERATION_EVT:
         if (param->model_operation.opcode == ESP_BLE_MESH_VND_MODEL_OP_STATUS) {
             int64_t end_time = esp_timer_get_time();
-            store.data = *(uint16_t *)param->model_operation.msg;
+            // store.data = *(uint16_t *)param->model_operation.msg;
+            store.dataArr = (uint8_t *)param->model_operation.msg;
             // ESP_LOGI(TAG, "Recv 0x%06x, tid 0x%04x, time %lldus",
             //     param->model_operation.opcode, store.vnd_tid, end_time - start_time);
-            ESP_LOGW(MASTER_TAG, "Received dummy sensor data: %d", store.data);
-            // ESP_LOGW(MASTER_TAG, "Number room: %d", store.data);
+            ESP_LOGW(MASTER_TAG, "Received dummy sensor data: %d", store.dataArr[0]);
+            ESP_LOGW(MASTER_TAG, "Number room: %d", store.dataArr[1]);
         }
         break;
     case ESP_BLE_MESH_MODEL_SEND_COMP_EVT:
         if (param->model_send_comp.err_code) {
-            ESP_LOGE(TAG, "Failed to send message 0x%06x", param->model_send_comp.opcode);
+            // ESP_LOGE(TAG, "Failed to send message 0x%06x", param->model_send_comp.opcode);
             break;
         }
         start_time = esp_timer_get_time();
         ESP_LOGI(TAG, "Send 0x%06x", param->model_send_comp.opcode);
         break;
     case ESP_BLE_MESH_CLIENT_MODEL_RECV_PUBLISH_MSG_EVT:
-        ESP_LOGI(TAG, "Receive publish message 0x%06x", param->client_recv_publish_msg.opcode);
+        // ESP_LOGI(TAG, "Receive publish message 0x%06x", param->client_recv_publish_msg.opcode);
+        store.dataArr = (uint8_t *)param->model_operation.msg;
+        ESP_LOGW(MASTER_TAG, "Received dummy sensor data: %d", store.dataArr[0]);
+        ESP_LOGW(MASTER_TAG, "Number room: %d", store.dataArr[1]);
         break;
     case ESP_BLE_MESH_CLIENT_MODEL_SEND_TIMEOUT_EVT:
         ESP_LOGW(TAG, "Client message 0x%06x timeout", param->client_send_timeout.opcode);
@@ -623,7 +629,7 @@ void app_main(void)
     }
 
     while(1) {
-        ESP_LOGW(MASTER_TAG, "addr: %d", store.server_addr);
+        // ESP_LOGW(MASTER_TAG, "addr: %d", store.server_addr);
         example_ble_mesh_send_vendor_message(false);
         delay_seconds(6);
     }
