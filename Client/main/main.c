@@ -150,7 +150,7 @@ static void mesh_example_info_restore(void)
     }
 
     if (exist) {
-        ESP_LOGI(TAG, "Restore, server_addr 0x%04x, vnd_tid 0x%04x", store.server_addr, store.vnd_tid);
+        ESP_LOGI(TAG, "Restore, server_addr 0x%04x", store.server_addr);
     }
 }
 
@@ -471,7 +471,7 @@ void example_ble_mesh_send_vendor_message(bool resend)
     esp_ble_mesh_msg_ctx_t ctx = {0};
     uint32_t opcode;
     esp_err_t err;
-
+    
     ctx.net_idx = prov_key.net_idx;
     ctx.app_idx = prov_key.app_idx;
     // ctx.addr = store.server_addr;
@@ -629,7 +629,7 @@ void app_main(void)
     }
 
     while(1) {
-        // ESP_LOGW(MASTER_TAG, "addr: %d", store.server_addr);
+        // ESP_LOGW(MASTER_TAG, "Comp size: %d", sizeof(composition) );
         example_ble_mesh_send_vendor_message(false);
         delay_seconds(6);
     }
