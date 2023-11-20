@@ -1,1 +1,5 @@
-e6fc1e706b442917188fa42d90c12028ab0d56bd
+0000000000000000000000000000000000000000 377644344dd784295909aa5c722bb4c5690a247a An <tienan30072001@gmail.com> 1698595670 +0700	commit (initial): Transmit between 2 nodes and 1 server. Send dummy data.
+377644344dd784295909aa5c722bb4c5690a247a 377644344dd784295909aa5c722bb4c5690a247a An <tienan30072001@gmail.com> 1698595685 +0700	Branch: renamed refs/heads/master to refs/heads/main
+377644344dd784295909aa5c722bb4c5690a247a 94dd755c72b956d8a0e2d8da1e32b776b81e0db7 An <tienan30072001@gmail.com> 1698735915 +0700	commit: Able to send multiple message, store BLE provision data
+94dd755c72b956d8a0e2d8da1e32b776b81e0db7 e6fc1e706b442917188fa42d90c12028ab0d56bd An <tienan30072001@gmail.com> 1699407563 +0700	commit: Add sensor_reading
+e6fc1e706b442917188fa42d90c12028ab0d56bd 9e9e4aa84add577590120aa07992a4aaa895a25c An <tienan30072001@gmail.com> 1700273280 +0700	commit: update on sensor read 18/11/23

@@ -18,6 +18,7 @@
 #define DEFAULT_VREF    1100        //Use adc2_vref_to_gpio() to obtain a better estimate
 #define NO_OF_SAMPLES   64          //Multisampling
 
+#define MP2_DIGITAL_PIN     GPIO_NUM_26
 #define KY026_DIGITAL_PIN   GPIO_NUM_25
 #define BUTTON_DIGITAL_PIN  GPIO_NUM_4
 #define BUZZER_PIN          GPIO_NUM_5
@@ -65,6 +66,7 @@ void timer_callback(void *param)
     char* extreme_status = "Not Reached";
     uint32_t lm35_adc_reading = 0;
     uint32_t ky026_adc_reading = 0;
+    uint32_t mp2_adc_reading = 0;
     //Multisampling
     for (int i = 0; i < NO_OF_SAMPLES; i++) {
         if (unit == ADC_UNIT_1) {
@@ -75,30 +77,43 @@ void timer_callback(void *param)
             // lm35_adc_reading += raw;
         }
     }
+
     for (int j = 0; j < NO_OF_SAMPLES; j++) {
         if (unit == ADC_UNIT_1) {
             ky026_adc_reading += adc1_get_raw((adc1_channel_t)ky026_channel);
-        } else {
-            // int raw;
-            // adc2_get_raw((adc2_channel_t)lm35_channel, width, &raw);
-            // lm35_adc_reading += raw;
         }
     }
+
+    for (int k = 0; k < NO_OF_SAMPLES; k++) {
+        if (unit == ADC_UNIT_1) {
+            mp2_adc_reading += adc1_get_raw((adc1_channel_t)mp2_channel);
+        }
+    }
+
     lm35_adc_reading /= NO_OF_SAMPLES;
     ky026_adc_reading /= NO_OF_SAMPLES;
-    // Maximum output voltage of lm35 is 1.5V -> max lm35_adc_reading value is 1675 
-    //Convert lm35_adc_reading to voltage in mV
+    mp2_adc_reading /= NO_OF_SAMPLES;
+
+    // Maximum output voltage of lm35 is 1.5V -> max lm35_adc_reading value is 1675 (?)
+    // Convert lm35_adc_reading to voltage in mV
     uint32_t lm35_voltage = esp_adc_cal_raw_to_voltage(lm35_adc_reading, adc_chars);
     uint32_t ky026_voltage = esp_adc_cal_raw_to_voltage(ky026_adc_reading, adc_chars);
+    uint32_t mp2_voltage = esp_adc_cal_raw_to_voltage(mp2_adc_reading, adc_chars);
+
     // Convert to temperature
     temperature_val = lm35_voltage / 10;
     // Get extreme status of KY026
-    if(ky026_voltage <= 300) {
+    if(ky026_voltage <= 380) {
         extreme_status = "Reached!";
+        gpio_set_level(BUZZER_PIN, 1);
+        gpio_set_level(LED_DIGITAL_PIN, 1);
     }
     printf(" Raw: %d\t Lm35 Voltage: %dmV\n", lm35_adc_reading, lm35_voltage);
     printf(" Lm35 Temp: %f oC\n", temperature_val);
     printf(" Raw: %d\t Ky026 voltage: %dmV\t Ky026 extreme value: %s\n", ky026_adc_reading, ky026_voltage, extreme_status);
+    printf(" Raw: %d\t Mp2 Voltage: %dmV\n", mp2_adc_reading, mp2_voltage);
+    printf("\n");
+
 }
 
 static void check_efuse(void)
@@ -192,45 +207,7 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_timer_start_periodic(timer_handler, 5000000));
 
     while (1) {
-        // char* extreme_status = "Not Reached";
-        // uint32_t lm35_adc_reading = 0;
-        // uint32_t ky026_adc_reading = 0;
-        // //Multisampling
-        // for (int i = 0; i < NO_OF_SAMPLES; i++) {
-        //     if (unit == ADC_UNIT_1) {
-        //         lm35_adc_reading += adc1_get_raw((adc1_channel_t)lm35_channel);
-        //     } else {
-        //         // int raw;
-        //         // adc2_get_raw((adc2_channel_t)lm35_channel, width, &raw);
-        //         // lm35_adc_reading += raw;
-        //     }
-        // }
-        // for (int j = 0; j < NO_OF_SAMPLES; j++) {
-        //     if (unit == ADC_UNIT_1) {
-        //         ky026_adc_reading += adc1_get_raw((adc1_channel_t)ky026_channel);
-        //     } else {
-        //         // int raw;
-        //         // adc2_get_raw((adc2_channel_t)lm35_channel, width, &raw);
-        //         // lm35_adc_reading += raw;
-        //     }
-        // }
-        // lm35_adc_reading /= NO_OF_SAMPLES;
-        // ky026_adc_reading /= NO_OF_SAMPLES;
-        // // Maximum output voltage of lm35 is 1.5V -> max lm35_adc_reading value is 1675 
-        // //Convert lm35_adc_reading to voltage in mV
-        // uint32_t lm35_voltage = esp_adc_cal_raw_to_voltage(lm35_adc_reading, adc_chars);
-        // uint32_t ky026_voltage = esp_adc_cal_raw_to_voltage(ky026_adc_reading, adc_chars);
-        // // Convert to temperature
-        // float temperature = lm35_voltage / 10;
-        // // Get extreme status of KY026
-        // if(ky026_voltage <= 300) {
-        //     extreme_status = "Reached!";
-        // }
-        // printf(" Raw: %d\t Lm35 Voltage: %dmV\n", lm35_adc_reading, lm35_voltage);
-        // printf(" Lm35 Temp: %f oC\n", temperature);
-        // printf("Raw: %d\t Ky026 voltage: %dmV\t Ky026 extreme value: %s\n", ky026_adc_reading, ky026_voltage, extreme_status);
-        
-        esp_timer_dump(stdout);
+        // esp_timer_dump(stdout);
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }

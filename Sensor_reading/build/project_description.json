@@ -1,7 +1,7 @@
 {
     "version":            "1",
     "project_name":       "adc",
-    "project_version":    "e6fc1e7-dirty",
+    "project_version":    "9e9e4aa-dirty",
     "project_path":       "C:/BLE_Mesh/Sensor_reading",
     "idf_path":           "C:/Espressif/frameworks/esp-idf-v4.3.6",
     "build_dir":          "C:/BLE_Mesh/Sensor_reading/build",
