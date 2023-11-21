@@ -1,5 +1,4 @@
 # BLE_Mesh
-Tien An's graduation project and Hoang Nguyen's first contribution
 Hướng dẫn setup build và nạp code ESP-IDF cho ESP32
 
 1.	Tải và giải nén file Test_Gateway_Send_To_Server.zip (có thể mở xem tham khảo code trong /main/ hello_world_main.c)
