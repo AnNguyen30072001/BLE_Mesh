@@ -5,6 +5,8 @@
         "*.inc": "c",
         "esp_ble_mesh_defs.h": "c",
         "freertos.h": "c",
-        "nvs_flash.h": "c"
+        "nvs_flash.h": "c",
+        "string.h": "c",
+        "gpio.h": "c"
     }
 }

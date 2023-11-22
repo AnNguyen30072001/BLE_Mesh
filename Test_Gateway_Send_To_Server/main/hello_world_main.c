@@ -28,8 +28,9 @@
  * test_data_arr[4]: Temperature alarm flag. Value is 1 if temperature is too high => fire
  * test_data_arr[5]: Flame sensor alarm flag. Value is 1 if detect flame => fire
  * test_data_arr[6]: Smoke alarm flag. Value is 1 if detect smoke is too high => fire
+ * test_data_arr[7]: General fire alarm flag. Value is 1 if detect any sign of fire from sensors
  */
-uint8_t test_data_arr[7] = {101, 85, 29, 45, 0, 0, 0};
+uint8_t test_data_arr[8] = {101, 85, 29, 45, 0, 0, 0, 0};
 
 // Delay for a number of seconds
 void delay_seconds(uint32_t seconds) {
@@ -39,7 +40,7 @@ void delay_seconds(uint32_t seconds) {
 void app_main(void)
 {
     while(1) {
-        for(int i=0; i<7; i++) {
+        for(int i=0; i<8; i++) {
             printf("%d\n", test_data_arr[i]);
         }
         delay_seconds(5);
