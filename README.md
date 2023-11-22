@@ -15,10 +15,10 @@ B2: Sau khi cài xong framework, mở app ESP-IDF CMD. Cửa sổ này dùng đ�
 
 B3: Trong cửa sổ ESP-IDF cmd, đi đến đường dẫn folder project đã tải (Test_Gateway_Send_To_Server). Dùng lệnh cd, ví dụ như sau:
  ![image](https://github.com/hhoang308/BLE_Mesh/assets/57220076/71d1ed1a-9422-4921-a3aa-fae531fbaa29)
-
+nếu esp32-idf lưu ở ổ C mà folder project lưu ở ổ D thì sử dụng lệnh cd /d để chuyển giữa 2 phân vùng ổ nhớ, ví dụ cd /d E:\BLE_Mesh\Sensor_reading
 
 B4: Build code
-Nếu lần đầu build code, cần chạy lệnh này trước khi build: ipf.py fullclean
+Nếu lần đầu build code, cần chạy lệnh này trước khi build: idf.py fullclean
  ![image](https://github.com/hhoang308/BLE_Mesh/assets/57220076/332351a7-e54b-4e34-a2fe-a8fb6b3a0954)
 
 Để build code: chạy lệnh idf.py build
