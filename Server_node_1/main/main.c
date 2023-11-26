@@ -60,7 +60,7 @@ typedef enum {
 typedef enum {
     SMOKE_OK            = 0u,
     SMOKE_ALARM         = 1u,
-} Status_Flame_t;
+} Status_Smoke_t;
 
 typedef enum {
     NO_FIRE             = 0u,
@@ -81,6 +81,7 @@ static const adc_unit_t unit = ADC_UNIT_1;
 float temperature_val = 0;
 // Update flag
 volatile uint8_t update_flag = 0;
+volatile uint8_t ctx_flag = 0;
 // Variables that store voltage value
 uint32_t lm35_voltage = 0;
 uint32_t ky026_voltage = 0;
@@ -98,11 +99,16 @@ uint32_t mp2_voltage = 0;
  * Data_arr[7]: General fire alarm flag. Value is 1 if detect any sign of fire from sensors
  */
 // Sensor data to be sent to gateway
-uint8_t Data_arr[8] = {0};
 // Room number is 101
-Data_arr[0] = 101;
+uint8_t Data_arr[8] = {101, 0, 0, 0, TEMP_OK, FLAME_OK, SMOKE_OK, NO_FIRE};
 
-// esp_ble_mesh_msg_ctx_t *ctx_user;
+static esp_ble_mesh_msg_ctx_t ctx_user = {
+    .net_idx = 0,
+    .app_idx = 0,
+    .addr = 0,
+    .send_rel = true,
+    .send_ttl = ESP_BLE_MESH_TTL_DEFAULT,
+};
 
 static uint8_t dev_uuid[ESP_BLE_MESH_OCTET16_LEN] = { 0x32, 0x10 };
 
@@ -244,7 +250,12 @@ static void example_ble_mesh_custom_model_cb(esp_ble_mesh_model_cb_event_t event
                 ESP_LOGE(TAG, "Failed to send message 0x%06x", ESP_BLE_MESH_VND_MODEL_OP_STATUS);
             }
 
-            // ctx_user = param->model_operation.ctx;
+            if(ctx_flag == 0) {
+                ctx_user.net_idx = param->model_operation.ctx->net_idx;
+                ctx_user.app_idx = param->model_operation.ctx->app_idx;
+                ctx_user.addr = param->model_operation.ctx->addr;
+                ctx_flag = 1;
+            }
         }
         break;
     case ESP_BLE_MESH_MODEL_SEND_COMP_EVT:
@@ -292,27 +303,20 @@ void delay_seconds(uint32_t seconds) {
     vTaskDelay(seconds * portTICK_PERIOD_MS * 10);
 }
 
-// void send_to_master(uint8_t payload)
-// {
-//     printf("payload received by send_to_dimmer() 0x%02x", payload);
-//     esp_ble_mesh_msg_ctx_t ctx = {0};
+void send_to_master()
+{
+    esp_ble_mesh_msg_ctx_t *ctx_user_ptr = &ctx_user;
 
-//     ctx.net_idx = 0x0000;
-//     ctx.app_idx = 0x0000;
-//     ctx.addr = 0x0005;   /* dimmer */
-//     ctx.send_ttl = ESP_BLE_MESH_TTL_DEFAULT;
-//     ctx.send_rel = true;
-
-//     esp_err_t err = esp_ble_mesh_server_model_send_msg(&vnd_models[0], ctx_user,
-//     ESP_BLE_MESH_VND_MODEL_OP_STATUS, sizeof(payload), (uint8_t *)&payload);
-//     if (err) {
-//         ESP_LOGW(NODE_TAG, "Send message to master failed");
-//         return;
-//     }
-//     else {
-//         ESP_LOGW(NODE_TAG, "Message sent to master OK");
-//     }
-// }
+    esp_err_t err = esp_ble_mesh_server_model_send_msg(&vnd_models[0], ctx_user_ptr,
+    ESP_BLE_MESH_VND_MODEL_OP_STATUS, sizeof(Data_arr), (uint8_t *)Data_arr);
+    if (err) {
+        ESP_LOGW(NODE_TAG, "Send message to master failed");
+        return;
+    }
+    else {
+        ESP_LOGW(NODE_TAG, "Message sent to master OK");
+    }
+}
 
 // Warning Button interrupt handler
 static void IRAM_ATTR gpio_interrupt_handler(void *args)
@@ -325,7 +329,7 @@ static void IRAM_ATTR gpio_interrupt_handler(void *args)
 // Timer callback for reading sensor
 void timer_callback(void *param)
 {
-    char* extreme_status = "Not Reached";
+    // char* extreme_status = "Not Reached";
     uint32_t lm35_adc_reading = 0;
     uint32_t ky026_adc_reading = 0;
     uint32_t mp2_adc_reading = 0;
@@ -365,13 +369,17 @@ void timer_callback(void *param)
     // Convert to temperature
     temperature_val = lm35_voltage / 10;
     // Get extreme status of KY026
-    if(ky026_voltage <= 380) {
-        extreme_status = "Reached!";
+    if(ky026_voltage <= 300) {
+        // extreme_status = "Reached!";
         gpio_set_level(BUZZER_PIN, 1);
         gpio_set_level(LED_DIGITAL_PIN, 1);
     }
     update_flag = 1;
-
+    printf(" Raw: %d\t Lm35 Voltage: %dmV\n", lm35_adc_reading, lm35_voltage);
+    printf(" Lm35 Temp: %f oC\n", temperature_val);
+    printf(" Raw: %d\t Ky026 voltage: %dmV\n", ky026_adc_reading, ky026_voltage);
+    printf(" Raw: %d\t Mp2 Voltage: %dmV\n", mp2_adc_reading, mp2_voltage);
+    printf("\n");
 }
 
 // Check efuse ADC
@@ -424,20 +432,21 @@ void dataUpdate(void) {
     else {
         Data_arr[4] = TEMP_OK;
     }
-    if(ky026_voltage <= 400) {
+    if(ky026_voltage <= 300) {
         Data_arr[5] = FLAME_ALARM;
         Data_arr[7] = FIRE;
     }
     else {
         Data_arr[5] = FLAME_OK;
     }
-    if(mp2_voltage <= 4000) {
+    if(mp2_voltage <= 1500) {
         Data_arr[6] = SMOKE_ALARM;
         Data_arr[7] = FIRE;
     }
     else {
         Data_arr[6] = SMOKE_OK;
     }
+    
     update_flag = 0;
 }
 
@@ -524,8 +533,11 @@ void app_main(void)
         if(update_flag == 1) {
             dataUpdate();
         }
-        // send_to_master(test_data);
-        // delay_seconds(3);
+        else {
+            vTaskDelay(5 * portTICK_PERIOD_MS);
+        }
+        // send_to_master();
+        // delay_seconds(2);
     }
 }
 

@@ -59,8 +59,8 @@ static uint8_t dev_uuid[ESP_BLE_MESH_OCTET16_LEN];
 static struct example_info_store {
     uint16_t server_addr;   /* Vendor server unicast address */
     uint16_t vnd_tid;       /* TID contained in the vendor message */
-    uint16_t data;          /* Data received */
-    uint8_t *dataArr;
+    uint16_t data;          
+    uint8_t *dataArr;       /* Data received */
     uint8_t node_num; 
     uint16_t first_addr;
 } store = {
@@ -70,6 +70,18 @@ static struct example_info_store {
     .node_num = 0,
     .dataArr = NULL,
 };
+
+/**
+ * Pointer to data array received. The order of data:
+ * Data_arr[0]: room number
+ * Data_arr[1]: battery percentage
+ * Data_arr[2]: Temperature value
+ * Data_arr[3]: Smoke value
+ * Data_arr[4]: Temperature alarm flag. Value is 1 if temperature is too high => fire
+ * Data_arr[5]: Flame sensor alarm flag. Value is 1 if detect flame => fire
+ * Data_arr[6]: Smoke alarm flag. Value is 1 if detect smoke is too high => fire
+ * Data_arr[7]: General fire alarm flag. Value is 1 if detect any sign of fire from sensors
+ */
 
 static nvs_handle_t NVS_HANDLE;
 static const char * NVS_KEY = "vendor_client";
@@ -512,8 +524,14 @@ static void example_ble_mesh_custom_model_cb(esp_ble_mesh_model_cb_event_t event
             store.dataArr = (uint8_t *)param->model_operation.msg;
             // ESP_LOGI(TAG, "Recv 0x%06x, tid 0x%04x, time %lldus",
             //     param->model_operation.opcode, store.vnd_tid, end_time - start_time);
-            ESP_LOGW(MASTER_TAG, "Received dummy sensor data: %d", store.dataArr[0]);
-            ESP_LOGW(MASTER_TAG, "Number room: %d", store.dataArr[1]);
+            ESP_LOGW(MASTER_TAG, "Number room: %d", store.dataArr[0]);
+            ESP_LOGW(MASTER_TAG, "Battery: %d", store.dataArr[1]);
+            ESP_LOGW(MASTER_TAG, "Temperature: %d", store.dataArr[2]);
+            ESP_LOGW(MASTER_TAG, "Smoke: %d", store.dataArr[3]);
+            ESP_LOGW(MASTER_TAG, "Temperature Alarm: %d", store.dataArr[4]);
+            ESP_LOGW(MASTER_TAG, "Flame Alarm: %d", store.dataArr[5]);
+            ESP_LOGW(MASTER_TAG, "Smoke Alarm: %d", store.dataArr[6]);
+            ESP_LOGW(MASTER_TAG, "FIRE STATUS: %d", store.dataArr[7]);
         }
         break;
     case ESP_BLE_MESH_MODEL_SEND_COMP_EVT:
@@ -527,8 +545,15 @@ static void example_ble_mesh_custom_model_cb(esp_ble_mesh_model_cb_event_t event
     case ESP_BLE_MESH_CLIENT_MODEL_RECV_PUBLISH_MSG_EVT:
         // ESP_LOGI(TAG, "Receive publish message 0x%06x", param->client_recv_publish_msg.opcode);
         store.dataArr = (uint8_t *)param->model_operation.msg;
-        ESP_LOGW(MASTER_TAG, "Received dummy sensor data: %d", store.dataArr[0]);
-        ESP_LOGW(MASTER_TAG, "Number room: %d", store.dataArr[1]);
+        ESP_LOGW(MASTER_TAG, "Received public message... ");
+        ESP_LOGW(MASTER_TAG, "Number room: %d", store.dataArr[0]);
+        ESP_LOGW(MASTER_TAG, "Battery: %d", store.dataArr[1]);
+        ESP_LOGW(MASTER_TAG, "Temperature: %d", store.dataArr[2]);
+        ESP_LOGW(MASTER_TAG, "Smoke: %d", store.dataArr[3]);
+        ESP_LOGW(MASTER_TAG, "Temperature Alarm: %d", store.dataArr[4]);
+        ESP_LOGW(MASTER_TAG, "Flame Alarm: %d", store.dataArr[5]);
+        ESP_LOGW(MASTER_TAG, "Smoke Alarm: %d", store.dataArr[6]);
+        ESP_LOGW(MASTER_TAG, "FIRE STATUS: %d", store.dataArr[7]);
         break;
     case ESP_BLE_MESH_CLIENT_MODEL_SEND_TIMEOUT_EVT:
         ESP_LOGW(TAG, "Client message 0x%06x timeout", param->client_send_timeout.opcode);
@@ -639,9 +664,9 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_timer_create(&my_timer_args, &timer_handler));
     ESP_ERROR_CHECK(esp_timer_start_periodic(timer_handler, 6000000));
 
-    while(1) {
+    // while(1) {
         // ESP_LOGW(MASTER_TAG, "Comp size: %d", sizeof(composition) );
         // example_ble_mesh_send_vendor_message(false);
         // delay_seconds(6);
-    }
+    // }
 }

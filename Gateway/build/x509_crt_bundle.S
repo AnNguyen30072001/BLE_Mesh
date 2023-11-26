@@ -1,4 +1,4 @@
-/* * Data converted from C:/BLE_Mesh/Client/build/esp-idf/mbedtls/x509_crt_bundle
+/* * Data converted from C:/BLE_Mesh/Gateway/build/esp-idf/mbedtls/x509_crt_bundle
  */
 .data
 .section .rodata.embedded

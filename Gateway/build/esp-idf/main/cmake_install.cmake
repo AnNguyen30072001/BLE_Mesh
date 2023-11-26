@@ -1,4 +1,4 @@
-# Install script for directory: C:/BLE_Mesh/Client/main
+# Install script for directory: C:/BLE_Mesh/Gateway/main
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
