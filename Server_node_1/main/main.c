@@ -47,6 +47,8 @@
 #define BUZZER_PIN          GPIO_NUM_5
 #define LED_DIGITAL_PIN     GPIO_NUM_2
 
+#define NODE_ID             101
+
 typedef enum {
     FLAME_OK            = 0u,
     FLAME_ALARM         = 1u,
@@ -100,7 +102,7 @@ uint32_t mp2_voltage = 0;
  */
 // Sensor data to be sent to gateway
 // Room number is 101
-uint8_t Data_arr[8] = {101, 0, 0, 0, TEMP_OK, FLAME_OK, SMOKE_OK, NO_FIRE};
+uint8_t Data_arr[8] = {NODE_ID, 0, 0, 0, TEMP_OK, FLAME_OK, SMOKE_OK, NO_FIRE};
 
 static esp_ble_mesh_msg_ctx_t ctx_user = {
     .net_idx = 0,
