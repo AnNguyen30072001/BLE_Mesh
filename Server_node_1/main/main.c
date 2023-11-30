@@ -79,6 +79,9 @@ static const adc_bits_width_t width = ADC_WIDTH_BIT_12;
 static const adc_atten_t atten = ADC_ATTEN_DB_11;
 static const adc_unit_t unit = ADC_UNIT_1;
 
+
+// Const value for Euler number
+
 // Global variable that store temperature value
 float temperature_val = 0;
 // Update flag
@@ -371,11 +374,11 @@ void timer_callback(void *param)
     // Convert to temperature
     temperature_val = lm35_voltage / 10;
     // Get extreme status of KY026
-    if(ky026_voltage <= 300) {
-        // extreme_status = "Reached!";
-        gpio_set_level(BUZZER_PIN, 1);
-        gpio_set_level(LED_DIGITAL_PIN, 1);
-    }
+    // if(ky026_voltage <= 300) {
+    //     extreme_status = "Reached!";
+    //     gpio_set_level(BUZZER_PIN, 1);
+    //     gpio_set_level(LED_DIGITAL_PIN, 1);
+    // }
     update_flag = 1;
     printf(" Raw: %d\t Lm35 Voltage: %dmV\n", lm35_adc_reading, lm35_voltage);
     printf(" Lm35 Temp: %f oC\n", temperature_val);
@@ -437,6 +440,8 @@ void dataUpdate(void) {
     if(ky026_voltage <= 300) {
         Data_arr[5] = FLAME_ALARM;
         Data_arr[7] = FIRE;
+        gpio_set_level(BUZZER_PIN, 1);
+        gpio_set_level(LED_DIGITAL_PIN, 1);
     }
     else {
         Data_arr[5] = FLAME_OK;

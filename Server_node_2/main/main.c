@@ -1,14 +1,8 @@
 /* main.c - Application main entry point */
 
-/*
- * Copyright (c) 2017 Intel Corporation
- * Additional Copyright (c) 2018 Espressif Systems (Shanghai) PTE LTD
- *
- * SPDX-License-Identifier: Apache-2.0
- */
-
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 #include "esp_log.h"
 #include "nvs_flash.h"
@@ -27,6 +21,11 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+#include "esp_timer.h"
+#include "driver/gpio.h"
+#include "driver/adc.h"
+#include "esp_adc_cal.h"
+
 #define TAG "EXAMPLE"
 #define NODE_TAG "NODE"
 
@@ -38,13 +37,80 @@
 #define ESP_BLE_MESH_VND_MODEL_OP_SEND      ESP_BLE_MESH_MODEL_OP_3(0x00, CID_ESP)
 #define ESP_BLE_MESH_VND_MODEL_OP_STATUS    ESP_BLE_MESH_MODEL_OP_3(0x01, CID_ESP)
 
+// Configure for sensor reading
+#define DEFAULT_VREF    1100        //Use adc2_vref_to_gpio() to obtain a better estimate
+#define NO_OF_SAMPLES   64          //Multisampling
 
-// Dummy sensor data
-uint8_t test_data = 32;
-uint8_t test_data_arr[2] = {32,102};
+#define MP2_DIGITAL_PIN     GPIO_NUM_26
+#define KY026_DIGITAL_PIN   GPIO_NUM_25
+#define BUTTON_DIGITAL_PIN  GPIO_NUM_4
+#define BUZZER_PIN          GPIO_NUM_5
+#define LED_DIGITAL_PIN     GPIO_NUM_2
 
-// esp_ble_mesh_msg_ctx_t *ctx_user;
+#define NODE_ID             102
 
+typedef enum {
+    FLAME_OK            = 0u,
+    FLAME_ALARM         = 1u,
+} Status_Flame_t;
+
+typedef enum {
+    TEMP_OK             = 0u,
+    TEMP_ALARM          = 1u,
+} Status_Temp_t;
+
+typedef enum {
+    SMOKE_OK            = 0u,
+    SMOKE_ALARM         = 1u,
+} Status_Smoke_t;
+
+typedef enum {
+    NO_FIRE             = 0u,
+    FIRE                = 1u,
+} Fire_Sts_t;
+
+static esp_adc_cal_characteristics_t *adc_chars;
+
+static const adc_channel_t ky026_channel = ADC_CHANNEL_5;       // GPIO33 if ADC1, GPIO12 if ADC2 
+static const adc_channel_t lm35_channel = ADC_CHANNEL_6;        // GPIO34 if ADC1, GPIO14 if ADC2
+static const adc_channel_t mp2_channel = ADC_CHANNEL_7;       // GPIO35 if ADC1, GPIO27 if ADC2  
+
+static const adc_bits_width_t width = ADC_WIDTH_BIT_12;
+static const adc_atten_t atten = ADC_ATTEN_DB_11;
+static const adc_unit_t unit = ADC_UNIT_1;
+
+// Global variable that store temperature value
+float temperature_val = 0;
+// Update flag
+volatile uint8_t update_flag = 0;
+volatile uint8_t ctx_flag = 0;
+// Variables that store voltage value
+uint32_t lm35_voltage = 0;
+uint32_t ky026_voltage = 0;
+uint32_t mp2_voltage = 0;
+
+/**
+ * Data array to send to gateway. The order of data:
+ * Data_arr[0]: room number
+ * Data_arr[1]: battery percentage
+ * Data_arr[2]: Temperature value
+ * Data_arr[3]: Smoke value
+ * Data_arr[4]: Temperature alarm flag. Value is 1 if temperature is too high => fire
+ * Data_arr[5]: Flame sensor alarm flag. Value is 1 if detect flame => fire
+ * Data_arr[6]: Smoke alarm flag. Value is 1 if detect smoke is too high => fire
+ * Data_arr[7]: General fire alarm flag. Value is 1 if detect any sign of fire from sensors
+ */
+// Sensor data to be sent to gateway
+// Room number is 101
+uint8_t Data_arr[8] = {NODE_ID, 0, 0, 0, TEMP_OK, FLAME_OK, SMOKE_OK, NO_FIRE};
+
+static esp_ble_mesh_msg_ctx_t ctx_user = {
+    .net_idx = 0,
+    .app_idx = 0,
+    .addr = 0,
+    .send_rel = true,
+    .send_ttl = ESP_BLE_MESH_TTL_DEFAULT,
+};
 
 static uint8_t dev_uuid[ESP_BLE_MESH_OCTET16_LEN] = { 0x32, 0x10 };
 
@@ -181,12 +247,17 @@ static void example_ble_mesh_custom_model_cb(esp_ble_mesh_model_cb_event_t event
             //         sizeof(test_data), (uint8_t *)&test_data);
             esp_err_t err = esp_ble_mesh_server_model_send_msg(&vnd_models[0],
                     param->model_operation.ctx, ESP_BLE_MESH_VND_MODEL_OP_STATUS,
-                    sizeof(test_data_arr), (uint8_t *)test_data_arr);
+                    sizeof(Data_arr), (uint8_t *)Data_arr);
             if (err) {
                 ESP_LOGE(TAG, "Failed to send message 0x%06x", ESP_BLE_MESH_VND_MODEL_OP_STATUS);
             }
 
-            // ctx_user = param->model_operation.ctx;
+            if(ctx_flag == 0) {
+                ctx_user.net_idx = param->model_operation.ctx->net_idx;
+                ctx_user.app_idx = param->model_operation.ctx->app_idx;
+                ctx_user.addr = param->model_operation.ctx->addr;
+                ctx_flag = 1;
+            }
         }
         break;
     case ESP_BLE_MESH_MODEL_SEND_COMP_EVT:
@@ -234,30 +305,207 @@ void delay_seconds(uint32_t seconds) {
     vTaskDelay(seconds * portTICK_PERIOD_MS * 10);
 }
 
-// void send_to_master(uint8_t payload)
-// {
-//     printf("payload received by send_to_dimmer() 0x%02x", payload);
-//     esp_ble_mesh_msg_ctx_t ctx = {0};
+void send_to_master()
+{
+    esp_ble_mesh_msg_ctx_t *ctx_user_ptr = &ctx_user;
 
-//     ctx.net_idx = 0x0000;
-//     ctx.app_idx = 0x0000;
-//     ctx.addr = 0x0005;   /* dimmer */
-//     ctx.send_ttl = ESP_BLE_MESH_TTL_DEFAULT;
-//     ctx.send_rel = true;
+    esp_err_t err = esp_ble_mesh_server_model_send_msg(&vnd_models[0], ctx_user_ptr,
+    ESP_BLE_MESH_VND_MODEL_OP_STATUS, sizeof(Data_arr), (uint8_t *)Data_arr);
+    if (err) {
+        ESP_LOGW(NODE_TAG, "Send message to master failed");
+        return;
+    }
+    else {
+        ESP_LOGW(NODE_TAG, "Message sent to master OK");
+    }
+}
 
-//     esp_err_t err = esp_ble_mesh_server_model_send_msg(&vnd_models[0], ctx_user,
-//     ESP_BLE_MESH_VND_MODEL_OP_STATUS, sizeof(payload), (uint8_t *)&payload);
-//     if (err) {
-//         ESP_LOGW(NODE_TAG, "Send message to master failed");
-//         return;
-//     }
-//     else {
-//         ESP_LOGW(NODE_TAG, "Message sent to master OK");
-//     }
-// }
+// Warning Button interrupt handler
+static void IRAM_ATTR gpio_interrupt_handler(void *args)
+{
+    // int pinNumber = (int)args;
+    gpio_set_level(BUZZER_PIN, 1);
+    gpio_set_level(LED_DIGITAL_PIN, 1);
+}
+
+// Timer callback for reading sensor
+void timer_callback(void *param)
+{
+    // char* extreme_status = "Not Reached";
+    uint32_t lm35_adc_reading = 0;
+    uint32_t ky026_adc_reading = 0;
+    uint32_t mp2_adc_reading = 0;
+    //Multisampling
+    for (int i = 0; i < NO_OF_SAMPLES; i++) {
+        if (unit == ADC_UNIT_1) {
+            lm35_adc_reading += adc1_get_raw((adc1_channel_t)lm35_channel);
+        } else {
+            // int raw;
+            // adc2_get_raw((adc2_channel_t)lm35_channel, width, &raw);
+            // lm35_adc_reading += raw;
+        }
+    }
+
+    for (int j = 0; j < NO_OF_SAMPLES; j++) {
+        if (unit == ADC_UNIT_1) {
+            ky026_adc_reading += adc1_get_raw((adc1_channel_t)ky026_channel);
+        }
+    }
+
+    for (int k = 0; k < NO_OF_SAMPLES; k++) {
+        if (unit == ADC_UNIT_1) {
+            mp2_adc_reading += adc1_get_raw((adc1_channel_t)mp2_channel);
+        }
+    }
+
+    lm35_adc_reading /= NO_OF_SAMPLES;
+    ky026_adc_reading /= NO_OF_SAMPLES;
+    mp2_adc_reading /= NO_OF_SAMPLES;
+
+    // Maximum output voltage of lm35 is 1.5V -> max lm35_adc_reading value is 1675 (?)
+    // Convert lm35_adc_reading to voltage in mV
+    lm35_voltage = esp_adc_cal_raw_to_voltage(lm35_adc_reading, adc_chars);
+    ky026_voltage = esp_adc_cal_raw_to_voltage(ky026_adc_reading, adc_chars);
+    mp2_voltage = esp_adc_cal_raw_to_voltage(mp2_adc_reading, adc_chars);
+
+    // Convert to temperature
+    temperature_val = lm35_voltage / 10;
+    // Get extreme status of KY026
+    // if(ky026_voltage <= 300) {
+    //     extreme_status = "Reached!";
+    //     gpio_set_level(BUZZER_PIN, 1);
+    //     gpio_set_level(LED_DIGITAL_PIN, 1);
+    // }
+    update_flag = 1;
+    printf(" Raw: %d\t Lm35 Voltage: %dmV\n", lm35_adc_reading, lm35_voltage);
+    printf(" Lm35 Temp: %f oC\n", temperature_val);
+    printf(" Raw: %d\t Ky026 voltage: %dmV\n", ky026_adc_reading, ky026_voltage);
+    printf(" Raw: %d\t Mp2 Voltage: %dmV\n", mp2_adc_reading, mp2_voltage);
+    printf("\n");
+}
+
+// Check efuse ADC
+static void check_efuse(void)
+{
+#if CONFIG_IDF_TARGET_ESP32
+    //Check if TP is burned into eFuse
+    if (esp_adc_cal_check_efuse(ESP_ADC_CAL_VAL_EFUSE_TP) == ESP_OK) {
+        printf("eFuse Two Point: Supported\n");
+    } else {
+        printf("eFuse Two Point: NOT supported\n");
+    }
+    //Check Vref is burned into eFuse
+    if (esp_adc_cal_check_efuse(ESP_ADC_CAL_VAL_EFUSE_VREF) == ESP_OK) {
+        printf("eFuse Vref: Supported\n");
+    } else {
+        printf("eFuse Vref: NOT supported\n");
+    }
+#elif CONFIG_IDF_TARGET_ESP32S2
+    if (esp_adc_cal_check_efuse(ESP_ADC_CAL_VAL_EFUSE_TP) == ESP_OK) {
+        printf("eFuse Two Point: Supported\n");
+    } else {
+        printf("Cannot retrieve eFuse Two Point calibration values. Default calibration values will be used.\n");
+    }
+#else
+#error "This example is configured for ESP32/ESP32S2."
+#endif
+}
+
+// Print ADC config
+static void print_char_val_type(esp_adc_cal_value_t val_type)
+{
+    if (val_type == ESP_ADC_CAL_VAL_EFUSE_TP) {
+        printf("Characterized using Two Point Value\n");
+    } else if (val_type == ESP_ADC_CAL_VAL_EFUSE_VREF) {
+        printf("Characterized using eFuse Vref\n");
+    } else {
+        printf("Characterized using Default Vref\n");
+    }
+}
+
+void dataUpdate(void) {
+    Data_arr[2] = temperature_val;
+    Data_arr[3] = mp2_voltage;
+    Data_arr[7] = NO_FIRE;
+    if(temperature_val >= 50) {
+        Data_arr[4] = TEMP_ALARM;
+        Data_arr[7] = FIRE;
+    }
+    else {
+        Data_arr[4] = TEMP_OK;
+    }
+    if(ky026_voltage <= 300) {
+        Data_arr[5] = FLAME_ALARM;
+        Data_arr[7] = FIRE;
+        gpio_set_level(BUZZER_PIN, 1);
+        gpio_set_level(LED_DIGITAL_PIN, 1);
+    }
+    else {
+        Data_arr[5] = FLAME_OK;
+    }
+    if(mp2_voltage <= 1500) {
+        Data_arr[6] = SMOKE_ALARM;
+        Data_arr[7] = FIRE;
+    }
+    else {
+        Data_arr[6] = SMOKE_OK;
+    }
+    
+    update_flag = 0;
+}
+
 
 void app_main(void)
 {
+    // Configure GPIOs
+    gpio_pad_select_gpio(KY026_DIGITAL_PIN);
+    gpio_set_direction(KY026_DIGITAL_PIN, GPIO_MODE_OUTPUT);
+
+    gpio_pad_select_gpio(BUZZER_PIN);
+    gpio_set_direction(BUZZER_PIN, GPIO_MODE_OUTPUT);
+    gpio_set_level(BUZZER_PIN, 0);
+
+    gpio_pad_select_gpio(BUTTON_DIGITAL_PIN);
+    gpio_set_direction(BUTTON_DIGITAL_PIN, GPIO_MODE_INPUT);
+    gpio_pulldown_dis(BUTTON_DIGITAL_PIN);
+    gpio_pullup_en(BUTTON_DIGITAL_PIN);
+    gpio_set_intr_type(BUTTON_DIGITAL_PIN, GPIO_INTR_NEGEDGE);
+
+    gpio_pad_select_gpio(LED_DIGITAL_PIN);
+    gpio_set_direction(LED_DIGITAL_PIN, GPIO_MODE_INPUT);
+    gpio_set_level(LED_DIGITAL_PIN, 0);
+
+    // Configure gpio interrupt
+    gpio_install_isr_service(0);
+    gpio_isr_handler_add(BUTTON_DIGITAL_PIN, gpio_interrupt_handler, (void *)BUTTON_DIGITAL_PIN);
+
+    //Check if Two Point or Vref are burned into eFuse
+    check_efuse();
+
+    //Configure ADC
+    if (unit == ADC_UNIT_1) {
+        adc1_config_width(width);
+        adc1_config_channel_atten(lm35_channel, atten);
+        adc1_config_channel_atten(ky026_channel, atten);
+    } else {
+        adc2_config_channel_atten((adc2_channel_t)lm35_channel, atten);
+        adc2_config_channel_atten((adc2_channel_t)ky026_channel, atten);
+    }
+
+    // Characterize ADC
+    adc_chars = calloc(1, sizeof(esp_adc_cal_characteristics_t));
+    esp_adc_cal_value_t val_type = esp_adc_cal_characterize(unit, atten, width, DEFAULT_VREF, adc_chars);
+    print_char_val_type(val_type);
+
+    // Configure Timer
+    const esp_timer_create_args_t my_timer_args = {
+        .callback = &timer_callback,
+        .name = "My Timer"};
+    esp_timer_handle_t timer_handler;
+    ESP_ERROR_CHECK(esp_timer_create(&my_timer_args, &timer_handler));
+    ESP_ERROR_CHECK(esp_timer_start_periodic(timer_handler, 5000000));
+
+    // BLE configure
     esp_err_t err;
 
     ESP_LOGI(TAG, "Initializing...");
@@ -285,9 +533,15 @@ void app_main(void)
         ESP_LOGE(TAG, "Bluetooth mesh init failed (err %d)", err);
     }
 
-    // while(1) {
-    //     send_to_master(test_data);
-    //     delay_seconds(3);
-    // }
+    while(1) {
+        if(update_flag == 1) {
+            dataUpdate();
+        }
+        else {
+            vTaskDelay(5 * portTICK_PERIOD_MS);
+        }
+        // send_to_master();
+        // delay_seconds(2);
+    }
 }
 
