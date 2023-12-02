@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <math.h>
 
 #include "esp_log.h"
 #include "nvs_flash.h"
@@ -81,9 +82,10 @@ static const adc_unit_t unit = ADC_UNIT_1;
 
 
 // Const value for Euler number
-
-// Global variable that store temperature value
+const float euler_val = 2.718281828459045;
+// Global variable that store sensor value
 float temperature_val = 0;
+int smoke_ppm_val = 0;
 // Update flag
 volatile uint8_t update_flag = 0;
 volatile uint8_t ctx_flag = 0;
@@ -237,22 +239,25 @@ static void example_ble_mesh_custom_model_cb(esp_ble_mesh_model_cb_event_t event
     switch (event) {
     case ESP_BLE_MESH_MODEL_OPERATION_EVT:
         if (param->model_operation.opcode == ESP_BLE_MESH_VND_MODEL_OP_SEND) {
-            uint16_t tid = *(uint16_t *)param->model_operation.msg;
+            uint16_t received_frame_type = *(uint16_t *)param->model_operation.msg;
             
-            ESP_LOGI(TAG, "Recv 0x%06x, tid 0x%04x", param->model_operation.opcode, tid);
+            ESP_LOGI(TAG, "Recv 0x%06x, frame type 0x%04x", param->model_operation.opcode, received_frame_type);
 
-            // esp_err_t err = esp_ble_mesh_server_model_send_msg(&vnd_models[0],
-            //         param->model_operation.ctx, ESP_BLE_MESH_VND_MODEL_OP_STATUS,
-            //         sizeof(tid), (uint8_t *)&tid);
-
-            // esp_err_t err = esp_ble_mesh_server_model_send_msg(&vnd_models[0],
-            //         param->model_operation.ctx, ESP_BLE_MESH_VND_MODEL_OP_STATUS,
-            //         sizeof(test_data), (uint8_t *)&test_data);
-            esp_err_t err = esp_ble_mesh_server_model_send_msg(&vnd_models[0],
+            if(received_frame_type == 1) {
+                esp_err_t err = esp_ble_mesh_server_model_send_msg(&vnd_models[0],
                     param->model_operation.ctx, ESP_BLE_MESH_VND_MODEL_OP_STATUS,
                     sizeof(Data_arr), (uint8_t *)Data_arr);
-            if (err) {
-                ESP_LOGE(TAG, "Failed to send message 0x%06x", ESP_BLE_MESH_VND_MODEL_OP_STATUS);
+                if (err) {
+                    ESP_LOGE(TAG, "Failed to send message 0x%06x", ESP_BLE_MESH_VND_MODEL_OP_STATUS);
+                }
+            }
+            else if(received_frame_type == 2) {
+                gpio_set_level(BUZZER_PIN, 1);
+                gpio_set_level(LED_DIGITAL_PIN, 1);
+            }
+            else if(received_frame_type == 3) {
+                gpio_set_level(BUZZER_PIN, 0);
+                gpio_set_level(LED_DIGITAL_PIN, 0);
             }
 
             if(ctx_flag == 0) {
@@ -308,18 +313,18 @@ void delay_seconds(uint32_t seconds) {
     vTaskDelay(seconds * portTICK_PERIOD_MS * 10);
 }
 
-void send_to_master()
+void send_fire_alarm_immediately()
 {
     esp_ble_mesh_msg_ctx_t *ctx_user_ptr = &ctx_user;
 
     esp_err_t err = esp_ble_mesh_server_model_send_msg(&vnd_models[0], ctx_user_ptr,
     ESP_BLE_MESH_VND_MODEL_OP_STATUS, sizeof(Data_arr), (uint8_t *)Data_arr);
     if (err) {
-        ESP_LOGW(NODE_TAG, "Send message to master failed");
+        ESP_LOGW(NODE_TAG, "Send message to Gateway failed");
         return;
     }
     else {
-        ESP_LOGW(NODE_TAG, "Message sent to master OK");
+        ESP_LOGW(NODE_TAG, "Message sent to Gateway OK");
     }
 }
 
@@ -329,6 +334,8 @@ static void IRAM_ATTR gpio_interrupt_handler(void *args)
     // int pinNumber = (int)args;
     gpio_set_level(BUZZER_PIN, 1);
     gpio_set_level(LED_DIGITAL_PIN, 1);
+    Data_arr[7] = FIRE;
+    send_fire_alarm_immediately();
 }
 
 // Timer callback for reading sensor
@@ -365,25 +372,24 @@ void timer_callback(void *param)
     ky026_adc_reading /= NO_OF_SAMPLES;
     mp2_adc_reading /= NO_OF_SAMPLES;
 
-    // Maximum output voltage of lm35 is 1.5V -> max lm35_adc_reading value is 1675 (?)
     // Convert lm35_adc_reading to voltage in mV
     lm35_voltage = esp_adc_cal_raw_to_voltage(lm35_adc_reading, adc_chars);
     ky026_voltage = esp_adc_cal_raw_to_voltage(ky026_adc_reading, adc_chars);
     mp2_voltage = esp_adc_cal_raw_to_voltage(mp2_adc_reading, adc_chars);
 
-    // Convert to temperature
+    // Convert to temperature value
     temperature_val = lm35_voltage / 10;
-    // Get extreme status of KY026
-    // if(ky026_voltage <= 300) {
-    //     extreme_status = "Reached!";
-    //     gpio_set_level(BUZZER_PIN, 1);
-    //     gpio_set_level(LED_DIGITAL_PIN, 1);
-    // }
+    // Convert to Smoke ppm value
+    float temp = 2.3812 * (float)(mp2_voltage / 1000);
+    smoke_ppm_val = (int)(5.9627 * pow(euler_val, temp));
+    
+    // Set flag to update into buffer
     update_flag = 1;
+
     printf(" Raw: %d\t Lm35 Voltage: %dmV\n", lm35_adc_reading, lm35_voltage);
     printf(" Lm35 Temp: %f oC\n", temperature_val);
     printf(" Raw: %d\t Ky026 voltage: %dmV\n", ky026_adc_reading, ky026_voltage);
-    printf(" Raw: %d\t Mp2 Voltage: %dmV\n", mp2_adc_reading, mp2_voltage);
+    printf(" Raw: %d\t Mp2 Voltage: %dmV\t Mp2 PPM: %dppm\n", mp2_adc_reading, mp2_voltage, smoke_ppm_val);
     printf("\n");
 }
 
@@ -428,7 +434,7 @@ static void print_char_val_type(esp_adc_cal_value_t val_type)
 
 void dataUpdate(void) {
     Data_arr[2] = temperature_val;
-    Data_arr[3] = mp2_voltage;
+    Data_arr[3] = smoke_ppm_val;
     Data_arr[7] = NO_FIRE;
     if(temperature_val >= 50) {
         Data_arr[4] = TEMP_ALARM;
@@ -440,8 +446,8 @@ void dataUpdate(void) {
     if(ky026_voltage <= 300) {
         Data_arr[5] = FLAME_ALARM;
         Data_arr[7] = FIRE;
-        gpio_set_level(BUZZER_PIN, 1);
-        gpio_set_level(LED_DIGITAL_PIN, 1);
+        // gpio_set_level(BUZZER_PIN, 1);
+        // gpio_set_level(LED_DIGITAL_PIN, 1);
     }
     else {
         Data_arr[5] = FLAME_OK;
@@ -453,6 +459,11 @@ void dataUpdate(void) {
     else {
         Data_arr[6] = SMOKE_OK;
     }
+    if(Data_arr[7] == FIRE) {
+        send_fire_alarm_immediately();
+        gpio_set_level(BUZZER_PIN, 1);
+        gpio_set_level(LED_DIGITAL_PIN, 1);
+    }
     
     update_flag = 0;
 }
@@ -462,7 +473,7 @@ void app_main(void)
 {
     // Configure GPIOs
     gpio_pad_select_gpio(KY026_DIGITAL_PIN);
-    gpio_set_direction(KY026_DIGITAL_PIN, GPIO_MODE_OUTPUT);
+    gpio_set_direction(KY026_DIGITAL_PIN, GPIO_MODE_INPUT);
 
     gpio_pad_select_gpio(BUZZER_PIN);
     gpio_set_direction(BUZZER_PIN, GPIO_MODE_OUTPUT);
@@ -475,7 +486,7 @@ void app_main(void)
     gpio_set_intr_type(BUTTON_DIGITAL_PIN, GPIO_INTR_NEGEDGE);
 
     gpio_pad_select_gpio(LED_DIGITAL_PIN);
-    gpio_set_direction(LED_DIGITAL_PIN, GPIO_MODE_INPUT);
+    gpio_set_direction(LED_DIGITAL_PIN, GPIO_MODE_OUTPUT);
     gpio_set_level(LED_DIGITAL_PIN, 0);
 
     // Configure gpio interrupt
@@ -543,8 +554,6 @@ void app_main(void)
         else {
             vTaskDelay(5 * portTICK_PERIOD_MS);
         }
-        // send_to_master();
-        // delay_seconds(2);
     }
 }
 

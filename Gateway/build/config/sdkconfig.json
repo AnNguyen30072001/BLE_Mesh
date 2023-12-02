@@ -1009,7 +1009,7 @@
     "TWAI_ERRATA_FIX_RX_FRAME_INVALID": false,
     "TWAI_ERRATA_FIX_TX_INTR_LOST": false,
     "TWAI_ISR_IN_IRAM": false,
-    "UART_ISR_IN_IRAM": false,
+    "UART_ISR_IN_IRAM": true,
     "UNITY_ENABLE_BACKTRACE_ON_FAIL": false,
     "UNITY_ENABLE_COLOR": false,
     "UNITY_ENABLE_DOUBLE": true,

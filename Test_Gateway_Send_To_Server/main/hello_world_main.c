@@ -1,57 +1,104 @@
-/*
- * SPDX-FileCopyrightText: 2010-2022 Espressif Systems (Shanghai) CO LTD
- *
- * SPDX-License-Identifier: CC0-1.0
- */
-
 #include <stdio.h>
-#include <stdint.h>
-#include <inttypes.h>
-#include "sdkconfig.h"
+#include <stdlib.h> 
+#include <string.h>
 #include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "esp_flash.h"
-
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
+#include "freertos/queue.h"
+#include "driver/uart.h"
 #include "esp_log.h"
-#include "nvs_flash.h"
+#include "driver/gpio.h"
+#include "sdkconfig.h"
+#include "esp_intr_alloc.h"
+#include "esp32/rom/uart.h"
 
-#define TAG "TEST"
+#define LED_GPIO GPIO_NUM_2
 
-/**
- * Fake data array to send to server. The order of data:
- * test_data_arr[0]: room number
- * test_data_arr[1]: battery percentage
- * test_data_arr[2]: Temperature value
- * test_data_arr[3]: Smoke value
- * test_data_arr[4]: Temperature alarm flag. Value is 1 if temperature is too high => fire
- * test_data_arr[5]: Flame sensor alarm flag. Value is 1 if detect flame => fire
- * test_data_arr[6]: Smoke alarm flag. Value is 1 if detect smoke is too high => fire
- * test_data_arr[7]: General fire alarm flag. Value is 1 if detect any sign of fire from sensors
- */
-uint8_t test_data_arr[8] = {101, 85, 29, 45, 0, 0, 0, 0};
+static const char *TAG = "uart_events";
 
-// Delay for a number of seconds
-void delay_seconds(uint32_t seconds) {
-    vTaskDelay(seconds * portTICK_PERIOD_MS * 10);
+#define EX_UART_NUM UART_NUM_0
+
+#define BUF_SIZE (1024)
+#define RD_BUF_SIZE (BUF_SIZE)
+
+static bool led_state = false;
+static intr_handle_t handle_console;
+
+// Sample array of 8 numbers
+static uint8_t sample_array[8] = {101, 2, 3, 4, 5, 6, 7, 8};
+
+static void IRAM_ATTR uart_intr_handle(void *arg);
+
+static void init_led_gpio()
+{
+    gpio_pad_select_gpio(LED_GPIO);
+    gpio_set_direction(LED_GPIO, GPIO_MODE_OUTPUT);
+    gpio_set_level(LED_GPIO, 0); // Initially turn off LED
 }
 
-void app_main(void)
+static void configure_uart()
 {
-    while(1) {
-        for(int i=0; i<8; i++) {
-            printf("%d\n", test_data_arr[i]);
+    uart_config_t uart_config = {
+        .baud_rate = 115200,
+        .data_bits = UART_DATA_8_BITS,
+        .parity = UART_PARITY_DISABLE,
+        .stop_bits = UART_STOP_BITS_1,
+        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE};
+
+    ESP_ERROR_CHECK(uart_param_config(EX_UART_NUM, &uart_config));
+    ESP_ERROR_CHECK(uart_set_pin(EX_UART_NUM, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
+    ESP_ERROR_CHECK(uart_driver_install(EX_UART_NUM, BUF_SIZE * 2, 0, 0, NULL, 0));
+}
+
+static void configure_uart_interrupt()
+{
+    ESP_ERROR_CHECK(uart_isr_free(EX_UART_NUM));
+    ESP_ERROR_CHECK(uart_isr_register(EX_UART_NUM, uart_intr_handle, NULL, ESP_INTR_FLAG_IRAM, &handle_console));
+    ESP_ERROR_CHECK(uart_enable_rx_intr(EX_UART_NUM));
+}
+
+static void IRAM_ATTR uart_intr_handle(void *arg)
+{
+    uint16_t rx_fifo_len;
+    rx_fifo_len = UART0.status.rxfifo_cnt; // read number of bytes in UART buffer
+
+    if (rx_fifo_len > 0)
+    {
+        uint8_t data = UART0.fifo.rw_byte;
+
+        if (data == '1')
+        {
+            gpio_set_level(LED_GPIO, 1); // Turn on LED
+            led_state = true;
         }
-        delay_seconds(5);
+        else if (data == '0')
+        {
+            gpio_set_level(LED_GPIO, 0); // Turn off LED
+            led_state = false;
+        }
     }
 
-    /* Neu code tren ko chay, dung code nay */
-    // while(1) {
-    //     for(int i=0; i<7; i++) {
-    //         ESP_LOGW(TAG, "%d\n", test_data_arr[i]);
-    //     }
-    //     delay_seconds(5);
-    // }
+    uart_clear_intr_status(EX_UART_NUM, UART_RXFIFO_FULL_INT_CLR | UART_RXFIFO_TOUT_INT_CLR);
+    uart_write_bytes(EX_UART_NUM, (const char *)"RX Done", 7);
+}
 
+void app_main()
+{
+    esp_log_level_set(TAG, ESP_LOG_INFO);
+
+    init_led_gpio();
+    configure_uart();
+    configure_uart_interrupt();
+
+    while (1)
+    {
+        sample_array[7] = rand() % 2;
+        sample_array[0] = 101 + rand() % 4;
+        // Print the sample array every 5 seconds
+        for (int i = 0; i < 8; i++)
+        {
+            printf("%d ", sample_array[i]);
+        }
+        printf("\n");
+
+        vTaskDelay(5000 / portTICK_PERIOD_MS);
+    }
 }
