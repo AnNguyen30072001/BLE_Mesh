@@ -254,10 +254,12 @@ static void example_ble_mesh_custom_model_cb(esp_ble_mesh_model_cb_event_t event
             else if(received_frame_type == 2) {
                 gpio_set_level(BUZZER_PIN, 1);
                 gpio_set_level(LED_DIGITAL_PIN, 1);
+                ESP_LOGW(NODE_TAG, "Received Activate Alarm frame");
             }
             else if(received_frame_type == 3) {
                 gpio_set_level(BUZZER_PIN, 0);
                 gpio_set_level(LED_DIGITAL_PIN, 0);
+                ESP_LOGW(NODE_TAG, "Received Deactivate Alarm frame");
             }
 
             if(ctx_flag == 0) {

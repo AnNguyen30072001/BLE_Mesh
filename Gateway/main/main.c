@@ -45,6 +45,7 @@
 
 static bool led_state = false;
 static intr_handle_t handle_console;
+static volatile uint8_t rxFlag = 0;
 
 #define TAG "EXAMPLE"
 #define MASTER_TAG "MASTER"
@@ -703,11 +704,9 @@ static void IRAM_ATTR uart_intr_handle(void *arg)
 
         if (data == '1')
         {
-            example_ble_mesh_send_vendor_message(DEACTIVATE_ALARM_FRAME);
+            rxFlag = 1;
             gpio_set_level(LED_GPIO, 1); // Turn on LED
             led_state = true;
-            delay_seconds(3);
-            gpio_set_level(LED_GPIO, 1); // Turn off LED
         }
         // else if (data == '0')
         // {
@@ -776,9 +775,18 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_timer_create(&my_timer_args, &timer_handler));
     ESP_ERROR_CHECK(esp_timer_start_periodic(timer_handler, 8000000));
 
-    // while(1) {
+    while(1) {
         // ESP_LOGW(MASTER_TAG, "Comp size: %d", sizeof(composition) );
         // example_ble_mesh_send_vendor_message(REQUEST_FRAME);
         // delay_seconds(6);
-    // }
+        if(rxFlag == 1) {
+            example_ble_mesh_send_vendor_message(DEACTIVATE_ALARM_FRAME);
+            delay_seconds(1);
+            gpio_set_level(LED_GPIO, 0); // Turn off LED
+            rxFlag = 0;
+        }
+        else {
+            delay_seconds(1);
+        }
+    }
 }
