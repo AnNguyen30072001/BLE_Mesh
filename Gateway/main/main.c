@@ -590,14 +590,14 @@ static void example_ble_mesh_custom_model_cb(esp_ble_mesh_model_cb_event_t event
         // ESP_LOGW(MASTER_TAG, "Flame Alarm: %d", store.dataArr[5]);
         // ESP_LOGW(MASTER_TAG, "Smoke Alarm: %d", store.dataArr[6]);
         // ESP_LOGW(MASTER_TAG, "FIRE STATUS: %d", store.dataArr[7]);
-        int sof = 1111;
-        int ETX = 9999;
-        printf("%d ", sof);
+        // int sof = 1111;
+        // int ETX = 9999;
+        // printf("%d ", sof);
 
         for(int i=0; i<8; i++) {
             printf("%d ", store.dataArr[i]);
         }
-        printf("%d", ETX);
+        // printf("%d", ETX);
         printf("\n");
 
         if(store.dataArr[7] == 1) {

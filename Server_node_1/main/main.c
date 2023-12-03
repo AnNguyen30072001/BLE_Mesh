@@ -462,6 +462,7 @@ void dataUpdate(void) {
         Data_arr[6] = SMOKE_OK;
     }
     if(Data_arr[7] == FIRE) {
+        ESP_LOGW(NODE_TAG, "FIRE DETECTED. SENDING TO GATEWAY NOW...");
         send_fire_alarm_immediately();
         gpio_set_level(BUZZER_PIN, 1);
         gpio_set_level(LED_DIGITAL_PIN, 1);
