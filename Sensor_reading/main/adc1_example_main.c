@@ -24,8 +24,17 @@
 #define BUZZER_PIN          GPIO_NUM_5
 #define LED_DIGITAL_PIN     GPIO_NUM_2
 
+typedef enum {
+    NORMAL_MEASURE_MODE = 0u,
+    FALSE_ALARM_MEASURE_MODE = 1u
+} Measure_Mode_t;
+
 // Global variable that store temperature value
 float temperature_val = 0;
+// Global flags
+static volatile uint8_t false_alarm_flag = 0;
+static volatile uint8_t fire_flag = 0;
+static Measure_Mode_t measure_mode = NORMAL_MEASURE_MODE;
 
 // Queue Handler
 // xQueueHandle interputQueue;
@@ -103,15 +112,45 @@ void timer_callback(void *param)
     // Convert to temperature
     temperature_val = lm35_voltage / 10;
     // Get extreme status of KY026
-    if(ky026_voltage <= 380) {
-        extreme_status = "Reached!";
+    if(temperature_val >= 40 && temperature_val <= 50) {
+        false_alarm_flag = 1;
+    }
+    else if(ky026_voltage <= 500 && ky026_voltage >= 350) {
+        false_alarm_flag = 1;
+    }
+    else if(mp2_voltage >= 1000 && mp2_voltage <= 1500) {
+        false_alarm_flag = 1;
+    }
+    if(temperature_val > 50) {
+        fire_flag = 1;
+    }
+    else if(ky026_voltage < 350) {
+        fire_flag = 1;
+    }
+    else if(mp2_voltage > 1500) {
+        fire_flag = 1;
+    }
+    if( (temperature_val < 40) && (ky026_voltage > 500) && (mp2_voltage < 1000) ) {
+        false_alarm_flag = 0;
+    }
+    if(fire_flag == 1) {
+        false_alarm_flag = 0;
         gpio_set_level(BUZZER_PIN, 1);
         gpio_set_level(LED_DIGITAL_PIN, 1);
     }
+    
+    // if(ky026_voltage <= 380) {
+    //     false_alarm_flag = 0;
+    //     extreme_status = "Reached!";
+    //     gpio_set_level(BUZZER_PIN, 1);
+    //     gpio_set_level(LED_DIGITAL_PIN, 1);
+    // }
     printf(" Raw: %d\t Lm35 Voltage: %dmV\n", lm35_adc_reading, lm35_voltage);
     printf(" Lm35 Temp: %f oC\n", temperature_val);
     printf(" Raw: %d\t Ky026 voltage: %dmV\t Ky026 extreme value: %s\n", ky026_adc_reading, ky026_voltage, extreme_status);
     printf(" Raw: %d\t Mp2 Voltage: %dmV\n", mp2_adc_reading, mp2_voltage);
+    printf("False alarm flag: %d\n", false_alarm_flag);
+    printf("Fire flag: %d\n", fire_flag);
     printf("\n");
 
 }
@@ -204,10 +243,25 @@ void app_main(void)
         .name = "My Timer"};
     esp_timer_handle_t timer_handler;
     ESP_ERROR_CHECK(esp_timer_create(&my_timer_args, &timer_handler));
-    ESP_ERROR_CHECK(esp_timer_start_periodic(timer_handler, 5000000));
+    ESP_ERROR_CHECK(esp_timer_start_periodic(timer_handler, 15000000));
 
     while (1) {
         // esp_timer_dump(stdout);
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        // vTaskDelay(pdMS_TO_TICKS(1000));
+        if(false_alarm_flag == 1 || fire_flag == 1) {
+            if(measure_mode == NORMAL_MEASURE_MODE) {
+                ESP_ERROR_CHECK(esp_timer_stop(timer_handler));
+                ESP_ERROR_CHECK(esp_timer_start_periodic(timer_handler, 5000000));
+                measure_mode = FALSE_ALARM_MEASURE_MODE;
+            }
+        }
+        else if( (fire_flag == 0) || (false_alarm_flag == 0) ) {
+            if(measure_mode == FALSE_ALARM_MEASURE_MODE) {
+                ESP_ERROR_CHECK(esp_timer_stop(timer_handler));
+                ESP_ERROR_CHECK(esp_timer_start_periodic(timer_handler, 15000000));
+            }
+            measure_mode = NORMAL_MEASURE_MODE;
+        }
+        vTaskDelay(pdMS_TO_TICKS(50));
     }
 }

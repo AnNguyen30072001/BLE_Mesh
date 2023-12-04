@@ -454,7 +454,7 @@ void dataUpdate(void) {
     else {
         Data_arr[5] = FLAME_OK;
     }
-    if(mp2_voltage <= 1500) {
+    if(mp2_voltage >= 1500) {
         Data_arr[6] = SMOKE_ALARM;
         Data_arr[7] = FIRE;
     }
