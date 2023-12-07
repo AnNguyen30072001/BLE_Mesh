@@ -48,7 +48,7 @@
 #define BUZZER_PIN          GPIO_NUM_5
 #define LED_DIGITAL_PIN     GPIO_NUM_2
 
-#define NODE_ID             102
+#define NODE_ID             5
 
 typedef enum {
     FLAME_OK            = 0u,
@@ -70,6 +70,11 @@ typedef enum {
     FIRE                = 1u,
 } Fire_Sts_t;
 
+typedef enum {
+    NORMAL_MEASURE_MODE = 0u,
+    FALSE_ALARM_MEASURE_MODE = 1u
+} Measure_Mode_t;
+
 static esp_adc_cal_characteristics_t *adc_chars;
 
 static const adc_channel_t ky026_channel = ADC_CHANNEL_5;       // GPIO33 if ADC1, GPIO12 if ADC2 
@@ -83,12 +88,20 @@ static const adc_unit_t unit = ADC_UNIT_1;
 
 // Const value for Euler number
 const float euler_val = 2.718281828459045;
-// Global variable that store sensor value
+
+// Global variables that store sensor value
 float temperature_val = 0;
 int smoke_ppm_val = 0;
+uint8_t ppm_digit[4] = {0};
+
 // Update flag
 volatile uint8_t update_flag = 0;
 volatile uint8_t ctx_flag = 0;
+
+// False alarm flag
+static volatile uint8_t false_alarm_flag = 0;
+static Measure_Mode_t measure_mode = NORMAL_MEASURE_MODE;
+
 // Variables that store voltage value
 uint32_t lm35_voltage = 0;
 uint32_t ky026_voltage = 0;
@@ -104,10 +117,11 @@ uint32_t mp2_voltage = 0;
  * Data_arr[5]: Flame sensor alarm flag. Value is 1 if detect flame => fire
  * Data_arr[6]: Smoke alarm flag. Value is 1 if detect smoke is too high => fire
  * Data_arr[7]: General fire alarm flag. Value is 1 if detect any sign of fire from sensors
+ * Data_arr[8] - [11]: ppm value in digits
  */
 // Sensor data to be sent to gateway
-// Room number is 102
-uint8_t Data_arr[8] = {NODE_ID, 0, 0, 0, TEMP_OK, FLAME_OK, SMOKE_OK, NO_FIRE};
+// Room number is 101
+uint8_t Data_arr[12] = {NODE_ID, 0, 0, 0, TEMP_OK, FLAME_OK, SMOKE_OK, NO_FIRE, 0, 0, 0, 0};
 
 static esp_ble_mesh_msg_ctx_t ctx_user = {
     .net_idx = 0,
@@ -382,8 +396,9 @@ void timer_callback(void *param)
     // Convert to temperature value
     temperature_val = lm35_voltage / 10;
     // Convert to Smoke ppm value
-    float temp = 2.3812 * (float)(mp2_voltage / 1000);
+    float temp = 2.3812 * (float)((float)mp2_voltage / 1000);
     smoke_ppm_val = (int)(5.9627 * pow(euler_val, temp));
+    int tmp1 = smoke_ppm_val;
     
     // Set flag to update into buffer
     update_flag = 1;
@@ -392,7 +407,14 @@ void timer_callback(void *param)
     printf(" Lm35 Temp: %f oC\n", temperature_val);
     printf(" Raw: %d\t Ky026 voltage: %dmV\n", ky026_adc_reading, ky026_voltage);
     printf(" Raw: %d\t Mp2 Voltage: %dmV\t Mp2 PPM: %dppm\n", mp2_adc_reading, mp2_voltage, smoke_ppm_val);
+    printf("Temp = %f\n", temp);
     printf("\n");
+    for(uint8_t i=0; i<4; i++) {
+        tmp1 = smoke_ppm_val % 10;
+        ppm_digit[3-i] = tmp1;
+        smoke_ppm_val /= 10;
+    }
+    
 }
 
 // Check efuse ADC
@@ -436,16 +458,32 @@ static void print_char_val_type(esp_adc_cal_value_t val_type)
 
 void dataUpdate(void) {
     Data_arr[2] = temperature_val;
-    Data_arr[3] = smoke_ppm_val;
+    Data_arr[3] = 99;
     Data_arr[7] = NO_FIRE;
-    if(temperature_val >= 50) {
+    Data_arr[8] = ppm_digit[0];
+    Data_arr[9] = ppm_digit[1];
+    Data_arr[10] = ppm_digit[2];
+    Data_arr[11] = ppm_digit[3];
+    if( (temperature_val < 40) && (ky026_voltage > 500) && (mp2_voltage < 1000) ) {
+        false_alarm_flag = 0;
+    }
+    if(temperature_val >= 40 && temperature_val <= 50) {
+        false_alarm_flag = 1;
+    }
+    else if(ky026_voltage <= 500 && ky026_voltage >= 300) {
+        false_alarm_flag = 1;
+    }
+    else if(mp2_voltage >= 1000 && mp2_voltage <= 1500) {
+        false_alarm_flag = 1;
+    }
+    if(temperature_val > 50) {
         Data_arr[4] = TEMP_ALARM;
         Data_arr[7] = FIRE;
     }
     else {
         Data_arr[4] = TEMP_OK;
     }
-    if(ky026_voltage <= 300) {
+    if(ky026_voltage < 300) {
         Data_arr[5] = FLAME_ALARM;
         Data_arr[7] = FIRE;
         // gpio_set_level(BUZZER_PIN, 1);
@@ -454,14 +492,16 @@ void dataUpdate(void) {
     else {
         Data_arr[5] = FLAME_OK;
     }
-    if(mp2_voltage <= 1500) {
+    if(mp2_voltage > 1500) {
         Data_arr[6] = SMOKE_ALARM;
         Data_arr[7] = FIRE;
     }
     else {
         Data_arr[6] = SMOKE_OK;
     }
+    
     if(Data_arr[7] == FIRE) {
+        false_alarm_flag = 0;
         ESP_LOGW(NODE_TAG, "FIRE DETECTED. SENDING TO GATEWAY NOW...");
         send_fire_alarm_immediately();
         gpio_set_level(BUZZER_PIN, 1);
@@ -520,7 +560,7 @@ void app_main(void)
         .name = "My Timer"};
     esp_timer_handle_t timer_handler;
     ESP_ERROR_CHECK(esp_timer_create(&my_timer_args, &timer_handler));
-    ESP_ERROR_CHECK(esp_timer_start_periodic(timer_handler, 5000000));
+    ESP_ERROR_CHECK(esp_timer_start_periodic(timer_handler, 15000000));
 
     // BLE configure
     esp_err_t err;
@@ -554,9 +594,21 @@ void app_main(void)
         if(update_flag == 1) {
             dataUpdate();
         }
-        else {
-            vTaskDelay(5 * portTICK_PERIOD_MS);
+        if(false_alarm_flag == 1 || Data_arr[7] == FIRE) {
+            if(measure_mode == NORMAL_MEASURE_MODE) {
+                ESP_ERROR_CHECK(esp_timer_stop(timer_handler));
+                ESP_ERROR_CHECK(esp_timer_start_periodic(timer_handler, 5000000));
+                measure_mode = FALSE_ALARM_MEASURE_MODE;
+            }
         }
+        else if( (Data_arr[7] == NO_FIRE) || (false_alarm_flag == 0) ) {
+            if(measure_mode == FALSE_ALARM_MEASURE_MODE) {
+                ESP_ERROR_CHECK(esp_timer_stop(timer_handler));
+                ESP_ERROR_CHECK(esp_timer_start_periodic(timer_handler, 15000000));
+            }
+            measure_mode = NORMAL_MEASURE_MODE;
+        }
+        vTaskDelay(pdMS_TO_TICKS(50));
     }
 }
 

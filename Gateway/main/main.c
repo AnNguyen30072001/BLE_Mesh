@@ -111,6 +111,7 @@ static struct example_info_store {
  * Data_arr[5]: Flame sensor alarm flag. Value is 1 if detect flame => fire
  * Data_arr[6]: Smoke alarm flag. Value is 1 if detect smoke is too high => fire
  * Data_arr[7]: General fire alarm flag. Value is 1 if detect any sign of fire from sensors
+ * Data_arr[8] - [11]: ppm value in digits
  */
 
 static nvs_handle_t NVS_HANDLE;
@@ -594,8 +595,17 @@ static void example_ble_mesh_custom_model_cb(esp_ble_mesh_model_cb_event_t event
         // int ETX = 9999;
         // printf("%d ", sof);
 
+        int displayArr[8] = {0};
+        displayArr[0] = store.dataArr[0];
+        displayArr[1] = store.dataArr[1];
+        displayArr[2] = store.dataArr[2];
+        displayArr[3] = (store.dataArr[8] * 1000) + (store.dataArr[9] * 100) + (store.dataArr[10] * 10) + store.dataArr[11];  
+        displayArr[4] = store.dataArr[4];
+        displayArr[5] = store.dataArr[5];
+        displayArr[6] = store.dataArr[6];
+        displayArr[7] = store.dataArr[7];
         for(int i=0; i<8; i++) {
-            printf("%d ", store.dataArr[i]);
+            printf("%d ", displayArr[i]);
         }
         // printf("%d", ETX);
         printf("\n");

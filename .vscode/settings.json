@@ -10,6 +10,7 @@
         "gpio.h": "c",
         "ble_mesh_example_nvs.h": "c",
         "ble_mesh_example_init.h": "c",
-        "esp_bt.h": "c"
+        "esp_bt.h": "c",
+        "adc.h": "c"
     }
 }

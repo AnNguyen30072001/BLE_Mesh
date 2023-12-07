@@ -1,7 +1,7 @@
 {
     "version":            "1",
     "project_name":       "vendor_server",
-    "project_version":    "d6cb13f-dirty",
+    "project_version":    "32489b7-dirty",
     "project_path":       "C:/BLE_Mesh/Server_node_1",
     "idf_path":           "C:/Espressif/frameworks/esp-idf-v4.3.6",
     "build_dir":          "C:/BLE_Mesh/Server_node_1/build",
