@@ -80,6 +80,7 @@ static esp_adc_cal_characteristics_t *adc_chars;
 static const adc_channel_t ky026_channel = ADC_CHANNEL_5;       // GPIO33 if ADC1, GPIO12 if ADC2 
 static const adc_channel_t lm35_channel = ADC_CHANNEL_6;        // GPIO34 if ADC1, GPIO14 if ADC2
 static const adc_channel_t mp2_channel = ADC_CHANNEL_7;       // GPIO35 if ADC1, GPIO27 if ADC2  
+static const adc_channel_t battery_channel = ADC_CHANNEL_3;       // GPIO39 if ADC1, GPIO15 if ADC2 
 
 static const adc_bits_width_t width = ADC_WIDTH_BIT_12;
 static const adc_atten_t atten = ADC_ATTEN_DB_11;
@@ -89,10 +90,11 @@ static const adc_unit_t unit = ADC_UNIT_1;
 // Const value for Euler number
 const float euler_val = 2.718281828459045;
 
-// Global variables that store sensor value
+// Global variables that store sensor value and battery capacity
 float temperature_val = 0;
 int smoke_ppm_val = 0;
 uint8_t ppm_digit[4] = {0};
+uint8_t bat_capacity = 0;
 
 // Update flag
 volatile uint8_t update_flag = 0;
@@ -106,6 +108,7 @@ static Measure_Mode_t measure_mode = NORMAL_MEASURE_MODE;
 uint32_t lm35_voltage = 0;
 uint32_t ky026_voltage = 0;
 uint32_t mp2_voltage = 0;
+uint32_t bat_voltage = 0;
 
 /**
  * Data array to send to gateway. The order of data:
@@ -361,6 +364,7 @@ void timer_callback(void *param)
     uint32_t lm35_adc_reading = 0;
     uint32_t ky026_adc_reading = 0;
     uint32_t mp2_adc_reading = 0;
+    uint32_t bat_adc_reading = 0;
     //Multisampling
     for (int i = 0; i < NO_OF_SAMPLES; i++) {
         if (unit == ADC_UNIT_1) {
@@ -384,14 +388,23 @@ void timer_callback(void *param)
         }
     }
 
+    for (int m = 0; m < NO_OF_SAMPLES; m++) {
+        if (unit == ADC_UNIT_1) {
+            bat_adc_reading += adc1_get_raw((adc1_channel_t)battery_channel);
+        }
+    }
+    
+
     lm35_adc_reading /= NO_OF_SAMPLES;
     ky026_adc_reading /= NO_OF_SAMPLES;
     mp2_adc_reading /= NO_OF_SAMPLES;
+    bat_adc_reading /= NO_OF_SAMPLES;
 
     // Convert lm35_adc_reading to voltage in mV
     lm35_voltage = esp_adc_cal_raw_to_voltage(lm35_adc_reading, adc_chars);
     ky026_voltage = esp_adc_cal_raw_to_voltage(ky026_adc_reading, adc_chars);
     mp2_voltage = esp_adc_cal_raw_to_voltage(mp2_adc_reading, adc_chars);
+    bat_voltage = esp_adc_cal_raw_to_voltage(bat_adc_reading, adc_chars);
 
     // Convert to temperature value
     temperature_val = lm35_voltage / 10;
@@ -399,6 +412,29 @@ void timer_callback(void *param)
     float temp = 2.3812 * (float)((float)mp2_voltage / 1000);
     smoke_ppm_val = (int)(5.9627 * pow(euler_val, temp));
     int tmp1 = smoke_ppm_val;
+    // Convert to battery capacity
+    float bat_voltage_V = (float)((float)bat_voltage / 1000);
+    bat_voltage_V = bat_voltage_V * 10;
+    if(bat_voltage_V < 5.55) {
+        bat_capacity = 0;
+    }
+    else if(bat_voltage_V > 9.63) {
+        bat_capacity = 100;
+    }
+    else {
+        bat_capacity = (uint8_t)(0.0969*pow(bat_voltage_V, 6) - 7.5439*pow(bat_voltage_V, 5) + 200.95*pow(bat_voltage_V, 4) \
+            - 2581.2*pow(bat_voltage_V, 3) + 17483*pow(bat_voltage_V, 2) - 60279*bat_voltage_V + 83631);
+        
+        bat_capacity -= 5;
+        bat_capacity = 100 - bat_capacity;
+    }
+
+    // Update digits of smoke value to update later
+    for(uint8_t i=0; i<4; i++) {
+        tmp1 = smoke_ppm_val % 10;
+        ppm_digit[3-i] = tmp1;
+        smoke_ppm_val /= 10;
+    }
     
     // Set flag to update into buffer
     update_flag = 1;
@@ -409,11 +445,6 @@ void timer_callback(void *param)
     printf(" Raw: %d\t Mp2 Voltage: %dmV\t Mp2 PPM: %dppm\n", mp2_adc_reading, mp2_voltage, smoke_ppm_val);
     printf("Temp = %f\n", temp);
     printf("\n");
-    for(uint8_t i=0; i<4; i++) {
-        tmp1 = smoke_ppm_val % 10;
-        ppm_digit[3-i] = tmp1;
-        smoke_ppm_val /= 10;
-    }
     
 }
 
@@ -457,6 +488,7 @@ static void print_char_val_type(esp_adc_cal_value_t val_type)
 }
 
 void dataUpdate(void) {
+    Data_arr[1] = bat_capacity;
     Data_arr[2] = temperature_val;
     Data_arr[3] = 99;
     Data_arr[7] = NO_FIRE;
