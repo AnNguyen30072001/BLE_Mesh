@@ -47,6 +47,7 @@
 #define BUTTON_DIGITAL_PIN  GPIO_NUM_4
 #define BUZZER_PIN          GPIO_NUM_5
 #define LED_DIGITAL_PIN     GPIO_NUM_2
+#define BLE_LED_PIN         GPIO_NUM_18
 
 #define NODE_ID             5
 
@@ -266,7 +267,12 @@ static void example_ble_mesh_custom_model_cb(esp_ble_mesh_model_cb_event_t event
                     sizeof(Data_arr), (uint8_t *)Data_arr);
                 if (err) {
                     ESP_LOGE(TAG, "Failed to send message 0x%06x", ESP_BLE_MESH_VND_MODEL_OP_STATUS);
+                    gpio_set_level(BLE_LED_PIN, 0);
                 }
+                else {
+                    gpio_set_level(BLE_LED_PIN, 1);
+                }
+
             }
             else if(received_frame_type == 2) {
                 gpio_set_level(BUZZER_PIN, 1);
@@ -429,6 +435,8 @@ void timer_callback(void *param)
         bat_capacity = 100 - bat_capacity;
     }
 
+    printf(" Raw: %d\t Mp2 Voltage: %dmV\t Mp2 PPM: %dppm\n", mp2_adc_reading, mp2_voltage, smoke_ppm_val);
+
     // Update digits of smoke value to update later
     for(uint8_t i=0; i<4; i++) {
         tmp1 = smoke_ppm_val % 10;
@@ -439,10 +447,10 @@ void timer_callback(void *param)
     // Set flag to update into buffer
     update_flag = 1;
 
+    printf(" \nBat capacity: %d\n", bat_capacity);
     printf(" Raw: %d\t Lm35 Voltage: %dmV\n", lm35_adc_reading, lm35_voltage);
     printf(" Lm35 Temp: %f oC\n", temperature_val);
     printf(" Raw: %d\t Ky026 voltage: %dmV\n", ky026_adc_reading, ky026_voltage);
-    printf(" Raw: %d\t Mp2 Voltage: %dmV\t Mp2 PPM: %dppm\n", mp2_adc_reading, mp2_voltage, smoke_ppm_val);
     printf("Temp = %f\n", temp);
     printf("\n");
     
@@ -564,6 +572,10 @@ void app_main(void)
     gpio_set_direction(LED_DIGITAL_PIN, GPIO_MODE_OUTPUT);
     gpio_set_level(LED_DIGITAL_PIN, 0);
 
+    gpio_pad_select_gpio(BLE_LED_PIN);
+    gpio_set_direction(BLE_LED_PIN, GPIO_MODE_OUTPUT);
+    gpio_set_level(BLE_LED_PIN, 0);
+
     // Configure gpio interrupt
     gpio_install_isr_service(0);
     gpio_isr_handler_add(BUTTON_DIGITAL_PIN, gpio_interrupt_handler, (void *)BUTTON_DIGITAL_PIN);
@@ -620,6 +632,9 @@ void app_main(void)
     err = ble_mesh_init();
     if (err) {
         ESP_LOGE(TAG, "Bluetooth mesh init failed (err %d)", err);
+    }
+    else {
+        gpio_set_level(BLE_LED_PIN, 1);
     }
 
     while(1) {

@@ -46,6 +46,7 @@
 static bool led_state = false;
 static intr_handle_t handle_console;
 static volatile uint8_t rxFlag = 0;
+static volatile uint8_t alarmOnFlag = 0;
 
 #define TAG "EXAMPLE"
 #define MASTER_TAG "MASTER"
@@ -84,12 +85,18 @@ typedef enum {
     DEACTIVATE_ALARM_FRAME  = 3u
 }Gateway_SendType;
 
+typedef enum {
+    ALARM_OFF               = 0u,
+    ALARM_ON                = 1u
+}Alarm_StatusType;
+
 static struct example_info_store {
     uint16_t server_addr;   /* Vendor server unicast address */
     uint16_t vnd_tid;       /* TID contained in the vendor message */
     Gateway_SendType frameType;      /* Frame type to be sent */
     uint16_t data;          
     uint8_t *dataArr;       /* Data received */
+    int displayArr[9];         /* Data frame to send to server */
     uint8_t node_num; 
     uint16_t first_addr;
 } store = {
@@ -99,6 +106,7 @@ static struct example_info_store {
     .data = 0,
     .node_num = 0,
     .dataArr = NULL,
+    .displayArr = {0},
 };
 
 /**
@@ -582,37 +590,26 @@ static void example_ble_mesh_custom_model_cb(esp_ble_mesh_model_cb_event_t event
     case ESP_BLE_MESH_CLIENT_MODEL_RECV_PUBLISH_MSG_EVT:
         // ESP_LOGI(TAG, "Receive publish message 0x%06x", param->client_recv_publish_msg.opcode);
         store.dataArr = (uint8_t *)param->model_operation.msg;
-        // ESP_LOGW(MASTER_TAG, "Received public message... ");
-        // ESP_LOGW(MASTER_TAG, "Number room: %d", store.dataArr[0]);
-        // ESP_LOGW(MASTER_TAG, "Battery: %d", store.dataArr[1]);
-        // ESP_LOGW(MASTER_TAG, "Temperature: %d", store.dataArr[2]);
-        // ESP_LOGW(MASTER_TAG, "Smoke: %d", store.dataArr[3]);
-        // ESP_LOGW(MASTER_TAG, "Temperature Alarm: %d", store.dataArr[4]);
-        // ESP_LOGW(MASTER_TAG, "Flame Alarm: %d", store.dataArr[5]);
-        // ESP_LOGW(MASTER_TAG, "Smoke Alarm: %d", store.dataArr[6]);
-        // ESP_LOGW(MASTER_TAG, "FIRE STATUS: %d", store.dataArr[7]);
-        // int sof = 1111;
-        // int ETX = 9999;
-        // printf("%d ", sof);
 
-        int displayArr[8] = {0};
-        displayArr[0] = store.dataArr[0];
-        displayArr[1] = store.dataArr[1];
-        displayArr[2] = store.dataArr[2];
-        displayArr[3] = (store.dataArr[8] * 1000) + (store.dataArr[9] * 100) + (store.dataArr[10] * 10) + store.dataArr[11];  
-        displayArr[4] = store.dataArr[4];
-        displayArr[5] = store.dataArr[5];
-        displayArr[6] = store.dataArr[6];
-        displayArr[7] = store.dataArr[7];
-        for(int i=0; i<8; i++) {
-            printf("%d ", displayArr[i]);
-        }
-        // printf("%d", ETX);
-        printf("\n");
-
+        
         if(store.dataArr[7] == 1) {
             example_ble_mesh_send_vendor_message(ACTIVATE_ALARM_FRAME);
+            store.displayArr[8] = ALARM_ON;
         }
+
+        store.displayArr[0] = store.dataArr[0];
+        store.displayArr[1] = store.dataArr[1];
+        store.displayArr[2] = store.dataArr[2];
+        store.displayArr[3] = (store.dataArr[8] * 1000) + (store.dataArr[9] * 100) + (store.dataArr[10] * 10) + store.dataArr[11];  
+        store.displayArr[4] = store.dataArr[4];
+        store.displayArr[5] = store.dataArr[5];
+        store.displayArr[6] = store.dataArr[6];
+        store.displayArr[7] = store.dataArr[7];
+        for(int i=0; i<9; i++) {
+            printf("%d ", store.displayArr[i]);
+        }
+        printf("\n");
+
         break;
     case ESP_BLE_MESH_CLIENT_MODEL_SEND_TIMEOUT_EVT:
         // ESP_LOGW(TAG, "Client message 0x%06x timeout", param->client_send_timeout.opcode);
@@ -712,17 +709,19 @@ static void IRAM_ATTR uart_intr_handle(void *arg)
     {
         uint8_t data = UART0.fifo.rw_byte;
 
-        if (data == '1')
+        if(data == '0')
+        {
+            rxFlag = 2;
+            gpio_set_level(LED_GPIO, 1); // Turn on LED
+            led_state = true;
+        }
+        else if(data == '1')
         {
             rxFlag = 1;
             gpio_set_level(LED_GPIO, 1); // Turn on LED
             led_state = true;
         }
-        // else if (data == '0')
-        // {
-        //     gpio_set_level(LED_GPIO, 0); // Turn off LED
-        //     led_state = false;
-        // }
+        
     }
 
     uart_clear_intr_status(EX_UART_NUM, UART_RXFIFO_FULL_INT_CLR | UART_RXFIFO_TOUT_INT_CLR);
@@ -791,6 +790,14 @@ void app_main(void)
         // delay_seconds(6);
         if(rxFlag == 1) {
             example_ble_mesh_send_vendor_message(DEACTIVATE_ALARM_FRAME);
+            store.displayArr[8] = ALARM_OFF;
+            delay_seconds(1);
+            gpio_set_level(LED_GPIO, 0); // Turn off LED
+            rxFlag = 0;
+        }
+        else if(rxFlag == 2) {
+            example_ble_mesh_send_vendor_message(ACTIVATE_ALARM_FRAME);
+            store.displayArr[8] = ALARM_ON;
             delay_seconds(1);
             gpio_set_level(LED_GPIO, 0); // Turn off LED
             rxFlag = 0;
