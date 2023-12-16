@@ -39,6 +39,7 @@
 #define ESP_BLE_MESH_VND_MODEL_OP_STATUS    ESP_BLE_MESH_MODEL_OP_3(0x01, CID_ESP)
 
 // Configure for sensor reading
+#define VOLTAGE_MAX     3300
 #define DEFAULT_VREF    1100        //Use adc2_vref_to_gpio() to obtain a better estimate
 #define NO_OF_SAMPLES   64          //Multisampling
 
@@ -90,6 +91,12 @@ static const adc_unit_t unit = ADC_UNIT_1;
 
 // Const value for Euler number
 const float euler_val = 2.718281828459045;
+
+// Const value to calculate RTD temperature sensor
+const float A_Rtd = 1.009249522 * 0.001;
+const float B_Rtd = 2.378405444 * 0.0001;
+const float C_Rtd = 2.019202697 * 0.0000001;
+const float R0_Rtd = 9998.6;
 
 // Global variables that store sensor value and battery capacity
 float temperature_val = 0;
@@ -413,7 +420,11 @@ void timer_callback(void *param)
     bat_voltage = esp_adc_cal_raw_to_voltage(bat_adc_reading, adc_chars);
 
     // Convert to temperature value
-    temperature_val = lm35_voltage / 10;
+    float R_Rtd = R0_Rtd * ( (VOLTAGE_MAX/lm35_voltage) - 1 );
+    float ln_R = log(R_Rtd);
+    temperature_val = (1 / (A_Rtd + (B_Rtd * ln_R) + (C_Rtd * ln_R * ln_R * ln_R)) ) - 273.0;
+    // temperature_val = lm35_voltage / 10;
+
     // Convert to Smoke ppm value
     float temp = 2.3812 * (float)((float)mp2_voltage / 1000);
     smoke_ppm_val = (int)(5.9627 * pow(euler_val, temp));
@@ -504,41 +515,39 @@ void dataUpdate(void) {
     Data_arr[9] = ppm_digit[1];
     Data_arr[10] = ppm_digit[2];
     Data_arr[11] = ppm_digit[3];
-    if( (temperature_val < 40) && (ky026_voltage > 500) && (mp2_voltage < 1000) ) {
-        false_alarm_flag = 0;
-    }
-    if(temperature_val >= 40 && temperature_val <= 50) {
-        false_alarm_flag = 1;
-    }
-    else if(ky026_voltage <= 500 && ky026_voltage >= 300) {
-        false_alarm_flag = 1;
-    }
-    else if(mp2_voltage >= 1000 && mp2_voltage <= 1500) {
-        false_alarm_flag = 1;
-    }
-    if(temperature_val > 50) {
-        Data_arr[4] = TEMP_ALARM;
-        Data_arr[7] = FIRE;
-    }
-    else {
-        Data_arr[4] = TEMP_OK;
-    }
-    if(ky026_voltage < 300) {
-        Data_arr[5] = FLAME_ALARM;
-        Data_arr[7] = FIRE;
-        // gpio_set_level(BUZZER_PIN, 1);
-        // gpio_set_level(LED_DIGITAL_PIN, 1);
-    }
-    else {
-        Data_arr[5] = FLAME_OK;
-    }
-    if(mp2_voltage > 1500) {
-        Data_arr[6] = SMOKE_ALARM;
-        Data_arr[7] = FIRE;
-    }
-    else {
-        Data_arr[6] = SMOKE_OK;
-    }
+    // if( (temperature_val < 40) && (ky026_voltage > 500) && (mp2_voltage < 1000) ) {
+    //     false_alarm_flag = 0;
+    // }
+    // if(temperature_val >= 40 && temperature_val <= 50) {
+    //     false_alarm_flag = 1;
+    // }
+    // else if(ky026_voltage <= 600 && ky026_voltage >= 400) {
+    //     false_alarm_flag = 1;
+    // }
+    // else if(mp2_voltage >= 2700 && mp2_voltage <= 3000) {
+    //     false_alarm_flag = 1;
+    // }
+    // if(temperature_val > 50) {
+    //     Data_arr[4] = TEMP_ALARM;
+    //     Data_arr[7] = FIRE;
+    // }
+    // else {
+    //     Data_arr[4] = TEMP_OK;
+    // }
+    // if(ky026_voltage < 400) {
+    //     Data_arr[5] = FLAME_ALARM;
+    //     Data_arr[7] = FIRE;
+    // }
+    // else {
+    //     Data_arr[5] = FLAME_OK;
+    // }
+    // if(mp2_voltage > 3000) {
+    //     Data_arr[6] = SMOKE_ALARM;
+    //     Data_arr[7] = FIRE;
+    // }
+    // else {
+    //     Data_arr[6] = SMOKE_OK;
+    // }
     
     if(Data_arr[7] == FIRE) {
         false_alarm_flag = 0;
@@ -588,9 +597,13 @@ void app_main(void)
         adc1_config_width(width);
         adc1_config_channel_atten(lm35_channel, atten);
         adc1_config_channel_atten(ky026_channel, atten);
+        adc1_config_channel_atten(mp2_channel, atten);
+        adc1_config_channel_atten(battery_channel, atten);
     } else {
         adc2_config_channel_atten((adc2_channel_t)lm35_channel, atten);
         adc2_config_channel_atten((adc2_channel_t)ky026_channel, atten);
+        adc2_config_channel_atten((adc2_channel_t)mp2_channel, atten);
+        adc2_config_channel_atten((adc2_channel_t)battery_channel, atten);
     }
 
     // Characterize ADC

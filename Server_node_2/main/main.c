@@ -510,10 +510,10 @@ void dataUpdate(void) {
     if(temperature_val >= 40 && temperature_val <= 50) {
         false_alarm_flag = 1;
     }
-    else if(ky026_voltage <= 500 && ky026_voltage >= 300) {
+    else if(ky026_voltage <= 600 && ky026_voltage >= 400) {
         false_alarm_flag = 1;
     }
-    else if(mp2_voltage >= 1000 && mp2_voltage <= 1500) {
+    else if(mp2_voltage >= 2700 && mp2_voltage <= 3000) {
         false_alarm_flag = 1;
     }
     if(temperature_val > 50) {
@@ -523,16 +523,14 @@ void dataUpdate(void) {
     else {
         Data_arr[4] = TEMP_OK;
     }
-    if(ky026_voltage < 300) {
+    if(ky026_voltage < 400) {
         Data_arr[5] = FLAME_ALARM;
         Data_arr[7] = FIRE;
-        // gpio_set_level(BUZZER_PIN, 1);
-        // gpio_set_level(LED_DIGITAL_PIN, 1);
     }
     else {
         Data_arr[5] = FLAME_OK;
     }
-    if(mp2_voltage > 1500) {
+    if(mp2_voltage > 3000) {
         Data_arr[6] = SMOKE_ALARM;
         Data_arr[7] = FIRE;
     }
@@ -588,9 +586,13 @@ void app_main(void)
         adc1_config_width(width);
         adc1_config_channel_atten(lm35_channel, atten);
         adc1_config_channel_atten(ky026_channel, atten);
+        adc1_config_channel_atten(mp2_channel, atten);
+        adc1_config_channel_atten(battery_channel, atten);
     } else {
         adc2_config_channel_atten((adc2_channel_t)lm35_channel, atten);
         adc2_config_channel_atten((adc2_channel_t)ky026_channel, atten);
+        adc2_config_channel_atten((adc2_channel_t)mp2_channel, atten);
+        adc2_config_channel_atten((adc2_channel_t)battery_channel, atten);
     }
 
     // Characterize ADC
