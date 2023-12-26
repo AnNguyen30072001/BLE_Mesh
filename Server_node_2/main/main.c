@@ -504,47 +504,47 @@ void dataUpdate(void) {
     Data_arr[9] = ppm_digit[1];
     Data_arr[10] = ppm_digit[2];
     Data_arr[11] = ppm_digit[3];
-    if( (temperature_val < 40) && (ky026_voltage > 500) && (mp2_voltage < 1000) ) {
-        false_alarm_flag = 0;
-    }
-    if(temperature_val >= 40 && temperature_val <= 50) {
-        false_alarm_flag = 1;
-    }
-    else if(ky026_voltage <= 600 && ky026_voltage >= 400) {
-        false_alarm_flag = 1;
-    }
-    else if(mp2_voltage >= 2700 && mp2_voltage <= 3000) {
-        false_alarm_flag = 1;
-    }
-    if(temperature_val > 50) {
-        Data_arr[4] = TEMP_ALARM;
-        Data_arr[7] = FIRE;
-    }
-    else {
-        Data_arr[4] = TEMP_OK;
-    }
-    if(ky026_voltage < 400) {
-        Data_arr[5] = FLAME_ALARM;
-        Data_arr[7] = FIRE;
-    }
-    else {
-        Data_arr[5] = FLAME_OK;
-    }
-    if(mp2_voltage > 3000) {
-        Data_arr[6] = SMOKE_ALARM;
-        Data_arr[7] = FIRE;
-    }
-    else {
-        Data_arr[6] = SMOKE_OK;
-    }
+    // if( (temperature_val < 40) && (ky026_voltage > 500) && (mp2_voltage < 1000) ) {
+    //     false_alarm_flag = 0;
+    // }
+    // if(temperature_val >= 40 && temperature_val <= 50) {
+    //     false_alarm_flag = 1;
+    // }
+    // else if(ky026_voltage <= 600 && ky026_voltage >= 400) {
+    //     false_alarm_flag = 1;
+    // }
+    // else if(mp2_voltage >= 2700 && mp2_voltage <= 3000) {
+    //     false_alarm_flag = 1;
+    // }
+    // if(temperature_val > 50) {
+    //     Data_arr[4] = TEMP_ALARM;
+    //     Data_arr[7] = FIRE;
+    // }
+    // else {
+    //     Data_arr[4] = TEMP_OK;
+    // }
+    // if(ky026_voltage < 400) {
+    //     Data_arr[5] = FLAME_ALARM;
+    //     Data_arr[7] = FIRE;
+    // }
+    // else {
+    //     Data_arr[5] = FLAME_OK;
+    // }
+    // if(mp2_voltage > 3000) {
+    //     Data_arr[6] = SMOKE_ALARM;
+    //     Data_arr[7] = FIRE;
+    // }
+    // else {
+    //     Data_arr[6] = SMOKE_OK;
+    // }
     
-    if(Data_arr[7] == FIRE) {
-        false_alarm_flag = 0;
-        ESP_LOGW(NODE_TAG, "FIRE DETECTED. SENDING TO GATEWAY NOW...");
-        send_fire_alarm_immediately();
-        gpio_set_level(BUZZER_PIN, 1);
-        gpio_set_level(LED_DIGITAL_PIN, 1);
-    }
+    // if(Data_arr[7] == FIRE) {
+    //     false_alarm_flag = 0;
+    //     ESP_LOGW(NODE_TAG, "FIRE DETECTED. SENDING TO GATEWAY NOW...");
+    //     send_fire_alarm_immediately();
+    //     gpio_set_level(BUZZER_PIN, 1);
+    //     gpio_set_level(LED_DIGITAL_PIN, 1);
+    // }
     
     update_flag = 0;
 }
@@ -646,14 +646,14 @@ void app_main(void)
         if(false_alarm_flag == 1 || Data_arr[7] == FIRE) {
             if(measure_mode == NORMAL_MEASURE_MODE) {
                 ESP_ERROR_CHECK(esp_timer_stop(timer_handler));
-                ESP_ERROR_CHECK(esp_timer_start_periodic(timer_handler, 5000000));
+                ESP_ERROR_CHECK(esp_timer_start_periodic(timer_handler, 2000000));
                 measure_mode = FALSE_ALARM_MEASURE_MODE;
             }
         }
         else if( (Data_arr[7] == NO_FIRE) || (false_alarm_flag == 0) ) {
             if(measure_mode == FALSE_ALARM_MEASURE_MODE) {
                 ESP_ERROR_CHECK(esp_timer_stop(timer_handler));
-                ESP_ERROR_CHECK(esp_timer_start_periodic(timer_handler, 15000000));
+                ESP_ERROR_CHECK(esp_timer_start_periodic(timer_handler, 5000000));
             }
             measure_mode = NORMAL_MEASURE_MODE;
         }
