@@ -25,6 +25,7 @@
 #include "esp_timer.h"
 #include "driver/gpio.h"
 #include "driver/adc.h"
+#include "driver/timer.h"
 #include "esp_adc_cal.h"
 
 #define TAG "EXAMPLE"
@@ -49,7 +50,7 @@
 #define LED_DIGITAL_PIN     GPIO_NUM_2
 #define BLE_LED_PIN         GPIO_NUM_18
 
-#define NODE_ID             5
+#define NODE_ID             7
 
 typedef enum {
     FLAME_OK            = 0u,
@@ -100,6 +101,8 @@ uint8_t bat_capacity = 0;
 // Update flag
 volatile uint8_t update_flag = 0;
 volatile uint8_t ctx_flag = 0;
+volatile uint8_t alarm_flag = 0;
+volatile uint8_t BLE_flag = 0;
 
 // False alarm flag
 static volatile uint8_t false_alarm_flag = 0;
@@ -271,8 +274,8 @@ static void example_ble_mesh_custom_model_cb(esp_ble_mesh_model_cb_event_t event
                 }
                 else {
                     gpio_set_level(BLE_LED_PIN, 1);
+                    BLE_flag = 1;
                 }
-
             }
             else if(received_frame_type == 2) {
                 gpio_set_level(BUZZER_PIN, 1);
@@ -356,11 +359,17 @@ void send_fire_alarm_immediately()
 // Warning Button interrupt handler
 static void IRAM_ATTR gpio_interrupt_handler(void *args)
 {
-    // int pinNumber = (int)args;
     gpio_set_level(BUZZER_PIN, 1);
     gpio_set_level(LED_DIGITAL_PIN, 1);
     Data_arr[7] = FIRE;
-    send_fire_alarm_immediately();
+    alarm_flag = 1;
+    // send_fire_alarm_immediately();
+}
+
+// Timer callback for BLE timeout
+void timer_callback_BLE(void *param)
+{
+    gpio_set_level(BLE_LED_PIN, 0);
 }
 
 // Timer callback for reading sensor
@@ -498,53 +507,53 @@ static void print_char_val_type(esp_adc_cal_value_t val_type)
 void dataUpdate(void) {
     Data_arr[1] = bat_capacity;
     Data_arr[2] = temperature_val;
-    Data_arr[3] = 99;
+    Data_arr[3] = bat_capacity;
     Data_arr[7] = NO_FIRE;
     Data_arr[8] = ppm_digit[0];
     Data_arr[9] = ppm_digit[1];
     Data_arr[10] = ppm_digit[2];
     Data_arr[11] = ppm_digit[3];
-    // if( (temperature_val < 40) && (ky026_voltage > 500) && (mp2_voltage < 1000) ) {
-    //     false_alarm_flag = 0;
-    // }
-    // if(temperature_val >= 40 && temperature_val <= 50) {
-    //     false_alarm_flag = 1;
-    // }
-    // else if(ky026_voltage <= 600 && ky026_voltage >= 400) {
-    //     false_alarm_flag = 1;
-    // }
-    // else if(mp2_voltage >= 2700 && mp2_voltage <= 3000) {
-    //     false_alarm_flag = 1;
-    // }
-    // if(temperature_val > 50) {
-    //     Data_arr[4] = TEMP_ALARM;
-    //     Data_arr[7] = FIRE;
-    // }
-    // else {
-    //     Data_arr[4] = TEMP_OK;
-    // }
-    // if(ky026_voltage < 400) {
-    //     Data_arr[5] = FLAME_ALARM;
-    //     Data_arr[7] = FIRE;
-    // }
-    // else {
-    //     Data_arr[5] = FLAME_OK;
-    // }
-    // if(mp2_voltage > 3000) {
-    //     Data_arr[6] = SMOKE_ALARM;
-    //     Data_arr[7] = FIRE;
-    // }
-    // else {
-    //     Data_arr[6] = SMOKE_OK;
-    // }
+    if( (temperature_val < 40) && (ky026_voltage > 500) && (mp2_voltage < 1000) ) {
+        false_alarm_flag = 0;
+    }
+    if(temperature_val >= 40 && temperature_val <= 50) {
+        false_alarm_flag = 1;
+    }
+    else if(ky026_voltage <= 600 && ky026_voltage >= 400) {
+        false_alarm_flag = 1;
+    }
+    else if(mp2_voltage >= 2500 && mp2_voltage <= 3500) {
+        false_alarm_flag = 1;
+    }
+    if(temperature_val > 50) {
+        Data_arr[4] = TEMP_ALARM;
+        Data_arr[7] = FIRE;
+    }
+    else {
+        Data_arr[4] = TEMP_OK;
+    }
+    if(ky026_voltage < 400) {
+        Data_arr[5] = FLAME_ALARM;
+        Data_arr[7] = FIRE;
+    }
+    else {
+        Data_arr[5] = FLAME_OK;
+    }
+    if(mp2_voltage > 3500) {
+        Data_arr[6] = SMOKE_ALARM;
+        Data_arr[7] = FIRE;
+    }
+    else {
+        Data_arr[6] = SMOKE_OK;
+    }
     
-    // if(Data_arr[7] == FIRE) {
-    //     false_alarm_flag = 0;
-    //     ESP_LOGW(NODE_TAG, "FIRE DETECTED. SENDING TO GATEWAY NOW...");
-    //     send_fire_alarm_immediately();
-    //     gpio_set_level(BUZZER_PIN, 1);
-    //     gpio_set_level(LED_DIGITAL_PIN, 1);
-    // }
+    if(Data_arr[7] == FIRE) {
+        false_alarm_flag = 0;
+        ESP_LOGW(NODE_TAG, "FIRE DETECTED. SENDING TO GATEWAY NOW...");
+        send_fire_alarm_immediately();
+        // gpio_set_level(BUZZER_PIN, 1);
+        gpio_set_level(LED_DIGITAL_PIN, 1);
+    }
     
     update_flag = 0;
 }
@@ -562,9 +571,10 @@ void app_main(void)
 
     gpio_pad_select_gpio(BUTTON_DIGITAL_PIN);
     gpio_set_direction(BUTTON_DIGITAL_PIN, GPIO_MODE_INPUT);
-    gpio_pulldown_dis(BUTTON_DIGITAL_PIN);
-    gpio_pullup_en(BUTTON_DIGITAL_PIN);
-    gpio_set_intr_type(BUTTON_DIGITAL_PIN, GPIO_INTR_NEGEDGE);
+    // gpio_pulldown_dis(BUTTON_DIGITAL_PIN);
+    // gpio_pullup_en(BUTTON_DIGITAL_PIN);
+    gpio_set_pull_mode(BUTTON_DIGITAL_PIN, GPIO_PULLUP_ONLY);
+    gpio_set_intr_type(BUTTON_DIGITAL_PIN, GPIO_INTR_ANYEDGE);
 
     gpio_pad_select_gpio(LED_DIGITAL_PIN);
     gpio_set_direction(LED_DIGITAL_PIN, GPIO_MODE_OUTPUT);
@@ -606,7 +616,7 @@ void app_main(void)
         .name = "My Timer"};
     esp_timer_handle_t timer_handler;
     ESP_ERROR_CHECK(esp_timer_create(&my_timer_args, &timer_handler));
-    ESP_ERROR_CHECK(esp_timer_start_periodic(timer_handler, 15000000));
+    ESP_ERROR_CHECK(esp_timer_start_periodic(timer_handler, 5000000));
 
     // BLE configure
     esp_err_t err;
@@ -635,11 +645,25 @@ void app_main(void)
     if (err) {
         ESP_LOGE(TAG, "Bluetooth mesh init failed (err %d)", err);
     }
-    else {
-        gpio_set_level(BLE_LED_PIN, 1);
-    }
+
+    // Configure Timer for BLE status
+    const esp_timer_create_args_t my_timer_args_BLE = {
+        .callback = &timer_callback_BLE,
+        .name = "My BLE timer"};
+    esp_timer_handle_t timer_handler_BLE;
+    ESP_ERROR_CHECK(esp_timer_create(&my_timer_args_BLE, &timer_handler_BLE));
+    ESP_ERROR_CHECK(esp_timer_start_periodic(timer_handler_BLE, 7000000));
 
     while(1) {
+        if(alarm_flag == 1) {
+            send_fire_alarm_immediately();
+            alarm_flag = 0;
+        }
+        if(BLE_flag == 1){
+            ESP_ERROR_CHECK(esp_timer_stop(timer_handler_BLE));
+            ESP_ERROR_CHECK(esp_timer_start_periodic(timer_handler_BLE, 11000000));
+            BLE_flag = 0;
+        }
         if(update_flag == 1) {
             dataUpdate();
         }

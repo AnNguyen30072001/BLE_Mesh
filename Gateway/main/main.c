@@ -782,7 +782,7 @@ void app_main(void)
         .name = "My Timer"};
     esp_timer_handle_t timer_handler;
     ESP_ERROR_CHECK(esp_timer_create(&my_timer_args, &timer_handler));
-    ESP_ERROR_CHECK(esp_timer_start_periodic(timer_handler, 8000000));
+    ESP_ERROR_CHECK(esp_timer_start_periodic(timer_handler, 10000000));
 
     while(1) {
         // ESP_LOGW(MASTER_TAG, "Comp size: %d", sizeof(composition) );
