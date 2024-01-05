@@ -13,5 +13,6 @@
         "esp_bt.h": "c",
         "adc.h": "c",
         "cmath": "c"
-    }
+    },
+    "cmake.sourceDirectory": "C:/BLE_Mesh/esp-idf-v4.3.6/components/bootloader_support/test"
 }

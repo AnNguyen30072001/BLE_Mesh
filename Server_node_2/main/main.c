@@ -50,7 +50,7 @@
 #define LED_DIGITAL_PIN     GPIO_NUM_2
 #define BLE_LED_PIN         GPIO_NUM_18
 
-#define NODE_ID             8
+#define NODE_ID             6
 
 typedef enum {
     FLAME_OK            = 0u,
@@ -363,7 +363,6 @@ static void IRAM_ATTR gpio_interrupt_handler(void *args)
     gpio_set_level(LED_DIGITAL_PIN, 1);
     Data_arr[7] = FIRE;
     alarm_flag = 1;
-    // send_fire_alarm_immediately();
 }
 
 // Timer callback for BLE timeout
@@ -429,6 +428,7 @@ void timer_callback(void *param)
     int tmp1 = smoke_ppm_val;
     // Convert to battery capacity
     float bat_voltage_V = (float)((float)bat_voltage / 1000);
+    printf("bat vol: %f\n", bat_voltage_V);
     bat_voltage_V = bat_voltage_V * 10;
     if(bat_voltage_V < 5.55) {
         bat_capacity = 0;
@@ -516,16 +516,16 @@ void dataUpdate(void) {
     if( (temperature_val < 40) && (ky026_voltage > 500) && (mp2_voltage < 1000) ) {
         false_alarm_flag = 0;
     }
-    if(temperature_val >= 40 && temperature_val <= 50) {
+    if(temperature_val >= 60 && temperature_val <= 80) {
         false_alarm_flag = 1;
     }
     else if(ky026_voltage <= 600 && ky026_voltage >= 400) {
         false_alarm_flag = 1;
     }
-    else if(mp2_voltage >= 2500 && mp2_voltage <= 3500) {
+    else if(mp2_voltage >= 2900 && mp2_voltage <= 3100) {
         false_alarm_flag = 1;
     }
-    if(temperature_val > 50) {
+    if(temperature_val > 80) {
         Data_arr[4] = TEMP_ALARM;
         Data_arr[7] = FIRE;
     }
@@ -539,7 +539,7 @@ void dataUpdate(void) {
     else {
         Data_arr[5] = FLAME_OK;
     }
-    if(mp2_voltage > 3500) {
+    if(mp2_voltage > 3100) {
         Data_arr[6] = SMOKE_ALARM;
         Data_arr[7] = FIRE;
     }
