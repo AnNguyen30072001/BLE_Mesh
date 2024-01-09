@@ -251,7 +251,7 @@ rule RERUN_CMAKE
 # Rule for cleaning all built files.
 
 rule CLEAN
-  command = C:\Espressif\tools\ninja\1.10.2\ninja.exe -t clean
+  command = C:\mingw64\bin\ninja.exe -t clean
   description = Cleaning all built files...
 
 
@@ -259,6 +259,6 @@ rule CLEAN
 # Rule for printing all primary targets available.
 
 rule HELP
-  command = C:\Espressif\tools\ninja\1.10.2\ninja.exe -t targets
+  command = C:\mingw64\bin\ninja.exe -t targets
   description = All primary targets available:
 

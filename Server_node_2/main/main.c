@@ -97,6 +97,7 @@ float temperature_val = 0;
 int smoke_ppm_val = 0;
 uint8_t ppm_digit[4] = {0};
 uint8_t bat_capacity = 0;
+uint8_t prev_bat_capacity = 0;
 
 // Update flag
 volatile uint8_t update_flag = 0;
@@ -430,10 +431,14 @@ void timer_callback(void *param)
     float bat_voltage_V = (float)((float)bat_voltage / 1000);
     printf("bat vol: %f\n", bat_voltage_V);
     bat_voltage_V = bat_voltage_V * 10;
+    bat_voltage_V += 2;
+    if(bat_voltage_V > 11.4) {
+        bat_capacity = prev_bat_capacity;
+    }
     if(bat_voltage_V < 5.55) {
         bat_capacity = 0;
     }
-    else if(bat_voltage_V > 9.63) {
+    else if((bat_voltage_V > 9.63) && (bat_voltage_V < 11.4)) {
         bat_capacity = 100;
     }
     else {
@@ -442,17 +447,25 @@ void timer_callback(void *param)
         
         bat_capacity -= 5;
         bat_capacity = 100 - bat_capacity;
+        prev_bat_capacity = bat_capacity;
     }
 
     printf(" Raw: %d\t Mp2 Voltage: %dmV\t Mp2 PPM: %dppm\n", mp2_adc_reading, mp2_voltage, smoke_ppm_val);
 
     // Update digits of smoke value to update later
-    for(uint8_t i=0; i<4; i++) {
-        tmp1 = smoke_ppm_val % 10;
-        ppm_digit[3-i] = tmp1;
-        smoke_ppm_val /= 10;
+    if(smoke_ppm_val > 9999) {
+        for(uint8_t j=0; j<4; j++) {
+            ppm_digit[3-j] = 9;
+        }
     }
-    
+    else {
+        for(uint8_t i=0; i<4; i++) {
+            tmp1 = smoke_ppm_val % 10;
+            ppm_digit[3-i] = tmp1;
+            smoke_ppm_val /= 10;
+        }
+    }
+      
     // Set flag to update into buffer
     update_flag = 1;
 
@@ -513,10 +526,10 @@ void dataUpdate(void) {
     Data_arr[9] = ppm_digit[1];
     Data_arr[10] = ppm_digit[2];
     Data_arr[11] = ppm_digit[3];
-    if( (temperature_val < 40) && (ky026_voltage > 500) && (mp2_voltage < 1000) ) {
+    if( (temperature_val < 80) && (ky026_voltage > 600) && (mp2_voltage < 2900) ) {
         false_alarm_flag = 0;
     }
-    if(temperature_val >= 60 && temperature_val <= 80) {
+    if(temperature_val >= 80 && temperature_val <= 100) {
         false_alarm_flag = 1;
     }
     else if(ky026_voltage <= 600 && ky026_voltage >= 400) {

@@ -127,7 +127,7 @@ CMAKE_INSTALL_PREFIX:PATH=C:/Program Files (x86)/vendor_server
 CMAKE_LINKER:FILEPATH=C:/Espressif/tools/xtensa-esp32-elf/esp-2021r2-patch3-8.4.0/xtensa-esp32-elf/bin/xtensa-esp32-elf-ld.exe
 
 //Program used to build from build.ninja files.
-CMAKE_MAKE_PROGRAM:FILEPATH=C:/Espressif/tools/ninja/1.10.2/ninja.exe
+CMAKE_MAKE_PROGRAM:FILEPATH=C:/mingw64/bin/ninja.exe
 
 //Flags used by the linker during the creation of modules during
 // all build types.
